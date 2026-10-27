@@ -7,7 +7,7 @@
   "summary": "Every value has exactly one owner. Learn what moves, what copies, and how functions take and give back ownership.",
   "quest": {
     "title": "The Ledger of the Crab Fleet",
-    "story": "The Crab Fleet keeps one ledger, and there is only ever **one** copy of it. Whoever holds the ledger is responsible for it. When they leave port, the ledger goes with them, and anyone who tries to read it afterwards finds empty hands.\n\nYou are the new quartermaster. The old one left behind a pile of half-working Rust programs that track cargo, crew and treasure. The compiler, an old parrot named *Rustc*, keeps squawking about \"moved values\".\n\nLearn the rules of ownership, fix the programs, and win back the ledger to earn your place on the crew.\n"
+    "story": "The Crab Fleet keeps one ledger, and there is only ever **one** copy of it. Whoever holds the ledger is responsible for it. When they leave port, the ledger goes with them, and anyone who tries to read it afterwards finds empty hands.\n\nYou are the new quartermaster. The old one left behind a pile of half-working Rust programs that track cargo, crew and treasure. The compiler, an old parrot named *Rustc*, keeps squawking about \"moved values\".\n\nLearn the rules of ownership, fix the programs, and win back the ledger to earn your place on the crew.\n\nThe syntax, `String` methods and `Vec` basics used here are covered in the Prelude (levels 0A–0C). This level explains *why* they behave the way they do.\n"
   },
   "concepts": [
     {
@@ -32,7 +32,7 @@
     },
     {
       "title": "Lending with & (preview)",
-      "body": "Often a function only needs to *look* at a value. Then lend it with a reference (`&`) instead of moving it:\n\n```rust\nfn shout(s: &str) -> usize { s.len() }\n\nlet cargo = String::from(\"rum\");\nshout(&cargo);          // lend\nprintln!(\"{cargo}\");    // still ours\n```\n\n`&String` coerces to `&str` automatically. Level 2 covers borrowing in depth.\n"
+      "body": "Often a function only needs to *look* at a value. Then lend it with a reference (`&`) instead of moving it:\n\n```rust\nfn shout(s: &str) -> usize { s.len() }\n\nlet cargo = String::from(\"rum\");\nshout(&cargo);          // lend\nprintln!(\"{cargo}\");    // still ours\n```\n\n`&String` coerces to `&str` automatically. Lists work the same way: a function that only reads a `Vec<String>` takes `&[String]` (or `&Vec<String>`), and a loop that only reads one borrows it:\n\n```rust\nfn count(items: &[String]) -> usize { items.len() }\n\nlet crew = vec![String::from(\"Anne\")];\ncount(&crew);           // lend the whole list\nfor name in &crew {     // look at each item\n    println!(\"{name}\");\n}\nprintln!(\"{}\", crew.len());   // crew is still ours\n```\n\nWithout the `&`, `for name in crew` would move the list into the loop. Level 2 covers borrowing in depth.\n"
     }
   ],
   "visual": {
