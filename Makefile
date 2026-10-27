@@ -12,6 +12,8 @@ PORT     ?= 5020
 DATA     ?= $(HOME)/.local/share/rust-tutor
 CERT_DIR ?= $(HOME)/.local/share/lan-tls
 RUNNER   ?= http://127.0.0.1:4930
+# Extra docker-run args, e.g. RUN_EXTRA='-e LESSONS_DIR=/app/tests/fixtures/lessons'
+RUN_EXTRA ?=
 HOSTNAME_LAN ?= kai-lenovo.fritz.box
 CURL     := curl -fsS --cacert $(CERT_DIR)/ca.crt
 
@@ -35,7 +37,7 @@ run: build
 	  --network host \
 	  --user $$(id -u):$$(id -g) \
 	  $(SANDBOX_FLAGS) \
-	  -e PORT=$(PORT) -e RUNNER_URL=$(RUNNER) \
+	  -e PORT=$(PORT) -e RUNNER_URL=$(RUNNER) $(RUN_EXTRA) \
 	  -v $(DATA):/data \
 	  -v $(CERT_DIR)/server.crt:/certs/server.crt:ro \
 	  -v $(CERT_DIR)/server.key:/certs/server.key:ro \

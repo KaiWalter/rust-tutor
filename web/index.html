@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rust Tutor</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/map" title="Level map (Alt+M)"><span class="crab" aria-hidden="true">🦀</span> Rust Tutor</a>
+    <nav class="crumbs" id="crumbs"></nav>
+    <div class="stats">
+      <span class="stat" id="stat-xp" title="Experience points">0 XP</span>
+      <span class="stat" id="stat-streak" title="Daily streak">🔥 0</span>
+      <a class="stat stat-link" id="stat-review" href="#/review" title="Review queue (Alt+V)">0 due</a>
+      <span class="stat" id="stat-agent" title="CE-lane (hints, review, judge)">agent …</span>
+      <button class="icon-btn" id="btn-help" title="Keyboard shortcuts (?)">?</button>
+    </div>
+  </header>
+
+  <main id="view-map" class="view map-view" hidden></main>
+  <main id="view-review" class="view review-view" hidden></main>
+
+  <main id="view-challenge" class="view workspace" hidden>
+    <section class="pane lesson-pane" id="lesson" aria-label="Lesson"></section>
+    <section class="pane editor-pane" aria-label="Editor">
+      <div class="toolbar">
+        <button data-action="run" title="Run (Ctrl+Enter)">▶ Run</button>
+        <button data-action="check" title="Check with rustc (Ctrl+B)">✓ Check</button>
+        <button data-action="verify" class="primary" title="Submit to hidden tests (Ctrl+Shift+Enter)">Submit</button>
+        <button data-action="format" title="Format with rustfmt (Shift+Alt+F)">Format</button>
+        <button data-action="reset" title="Reset to starter (Alt+Shift+Backspace)">Reset</button>
+        <span class="spacer"></span>
+        <button data-action="hint" title="Ask the tutor for a hint (Alt+H)">Hint</button>
+        <button data-action="explain" title="Explain my failure (Alt+E)">Explain</button>
+        <button data-action="review" title="Code review of a passing solution (Alt+R)">Review</button>
+      </div>
+      <div id="choices" class="choices" hidden></div>
+      <div id="editor" class="editor"></div>
+      <div class="statusline" id="statusline">ready</div>
+    </section>
+    <section class="pane output-pane" aria-label="Output">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="output" aria-selected="true">Output</button>
+        <button role="tab" data-tab="tests">Tests</button>
+        <button role="tab" data-tab="diagnostics">Diagnostics <span class="badge" id="diag-count"></span></button>
+        <button role="tab" data-tab="tutor">Tutor</button>
+      </div>
+      <div class="tabpanel" data-panel="output">
+        <label class="stdin-label">stdin <textarea id="stdin" rows="2" spellcheck="false" placeholder="input for Run"></textarea></label>
+        <pre id="out" class="out"></pre>
+      </div>
+      <div class="tabpanel" data-panel="tests" hidden><div id="tests"></div></div>
+      <div class="tabpanel" data-panel="diagnostics" hidden><div id="diagnostics"></div></div>
+      <div class="tabpanel" data-panel="tutor" hidden><div id="tutor"></div></div>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay" hidden>
+    <div class="overlay-card" role="dialog" aria-modal="true">
+      <button class="icon-btn overlay-close" id="overlay-close" title="Close (Esc)">×</button>
+      <div id="overlay-body"></div>
+    </div>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/vendor/monaco/vs/loader.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
