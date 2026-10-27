@@ -1,0 +1,37 @@
+{
+  "id": "fixture-1",
+  "order": 1,
+  "title": "Fixture level",
+  "summary": "Minimal valid level used by the API tests.",
+  "quest": { "title": "Test quest", "story": "A tiny story." },
+  "concepts": [{ "title": "Moves", "body": "Assignment moves a `String`." }],
+  "visual": {
+    "title": "Move",
+    "code": "let a = String::from(\"x\");\nlet b = a;",
+    "steps": [
+      { "line": 1, "note": "a owns the heap buffer", "stack": [{ "frame": "main", "vars": [{ "id": "a", "name": "a" }] }], "heap": [{ "id": "h", "label": "\"x\"" }], "arrows": [{ "from": "a", "to": "h", "kind": "own" }] },
+      { "line": 2, "note": "ownership moves to b", "stack": [{ "frame": "main", "vars": [{ "id": "a", "name": "a", "state": "moved" }, { "id": "b", "name": "b" }] }], "heap": [{ "id": "h", "label": "\"x\"" }], "arrows": [{ "from": "b", "to": "h", "kind": "own" }] }
+    ]
+  },
+  "challenges": [
+    { "id": "fx-predict", "title": "Predict", "kind": "predict", "xp": 10, "prompt": "What happens?", "starter": "fn main() { let a = String::new(); let b = a; println!(\"{}\", a); }",
+      "reference": "E0382", "choices": [{ "id": "compiles", "label": "It compiles" }, { "id": "E0382", "label": "E0382 borrow of moved value" }],
+      "hints": ["Think about who owns the String."], "check": { "kind": "choice", "answer": "E0382", "compilerAgrees": true } },
+    { "id": "fx-fix", "title": "Fix", "kind": "fix", "xp": 10, "prompt": "Make it compile without clone.", "starter": "fn main() { let a = String::from(\"hi\"); let b = a; println!(\"{} {}\", a, b); }",
+      "reference": "fn main() { let a = String::from(\"hi\"); let b = &a; println!(\"{} {}\", a, b); }",
+      "hints": ["Borrow instead of moving."], "check": { "kind": "output", "cases": [{ "name": "prints", "expected": "hi hi" }], "forbid": [{ "pattern": "\\.clone\\(\\)", "message": "no clone" }] } },
+    { "id": "fx-complete", "title": "Complete", "kind": "complete", "xp": 10, "prompt": "Implement add.", "starter": "fn add(a: i32, b: i32) -> i32 {\n    todo!()\n}\n\nfn main() {}\n",
+      "reference": "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\nfn main() {}\n", "hints": ["Use +."],
+      "check": { "kind": "tests", "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n    #[test]\n    fn adds() { assert_eq!(add(2, 3), 5); }\n}" } },
+    { "id": "fx-write", "title": "Write", "kind": "write", "xp": 10, "prompt": "Print hello.", "starter": "fn main() {\n}\n", "reference": "fn main() {\n    println!(\"hello\");\n}\n",
+      "hints": ["Reach for the standard printing macro with a newline."], "check": { "kind": "output", "cases": [{ "name": "hello", "expected": "hello\n" }] }, "judge": "agent", "rubric": "Idiomatic hello." },
+    { "id": "fx-boss", "title": "Boss", "kind": "boss", "xp": 30, "prompt": "Echo stdin uppercased.", "starter": "fn main() {\n}\n",
+      "reference": "use std::io::Read;\nfn main() {\n    let mut s = String::new();\n    std::io::stdin().read_to_string(&mut s).unwrap();\n    print!(\"{}\", s.to_uppercase());\n}\n",
+      "hints": ["read_to_string"], "check": { "kind": "output", "cases": [{ "name": "upper", "stdin": "abc\n", "expected": "ABC\n" }] } }
+  ],
+  "cards": [
+    { "id": "fx-card-1", "front": "What does `let b = a;` do to a String?", "back": "Moves ownership to b." },
+    { "id": "fx-card-2", "front": "Is i32 Copy?", "back": "Yes.", "unlockAfter": "fx-fix" },
+    { "id": "fx-card-3", "front": "What error is use-after-move?", "back": "E0382" }
+  ]
+}

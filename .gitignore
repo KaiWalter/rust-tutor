@@ -1,0 +1,5 @@
+node_modules/
+web/vendor/
+data/
+*.db
+*.db-*

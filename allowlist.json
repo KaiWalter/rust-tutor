@@ -1,0 +1,6 @@
+{
+  "_source": "Same client set as duotronic-web (~/nix-config/inventory/hosts/{kai-surfy,AYCV6WY,kai-lenovo}.nix hostnames on the FRITZ!Box LAN domain). Names only: re-resolved (A + AAAA) every refreshSeconds because clients rotate IPv6 privacy addresses. kai-lenovo is admitted via loopback + its LAN interface addresses.",
+  "hosts": ["kai-surfy.fritz.box", "AYCV6WY.fritz.box"],
+  "selfLabel": "kai-lenovo",
+  "refreshSeconds": 30
+}

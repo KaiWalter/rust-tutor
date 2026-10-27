@@ -1,0 +1,15 @@
+{
+  "name": "rust-tutor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Editor-centric Rust language tutor (rustc + rustfmt only) with CE-lane hints, review and judge",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/main.mjs",
+    "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "monaco-editor": "0.57.0"
+  }
+}
