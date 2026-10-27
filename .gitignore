@@ -3,3 +3,4 @@ web/vendor/
 data/
 *.db
 *.db-*
+CLAUDE.md
