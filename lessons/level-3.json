@@ -1,6 +1,8 @@
 {
   "id": "structs-enums",
-  "order": 3,
+  "order": 6,
+  "label": "3",
+  "section": "core",
   "title": "Structs, Enums & Pattern Matching",
   "summary": "Model ships, cargo and orders as your own types. Add methods with impl, let enums carry data, and take them apart with exhaustive match, guards, if let and let else, without moving out of borrowed values.",
   "quest": {

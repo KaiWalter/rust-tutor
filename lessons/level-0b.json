@@ -1,0 +1,604 @@
+{
+  "id": "strings",
+  "order": 2,
+  "label": "0B",
+  "section": "prelude",
+  "title": "Strings & Text",
+  "summary": "String vs &str, creating and growing text, format!, bytes vs chars, slicing and its UTF-8 trap, trim/split/lines/replace/contains, parsing numbers, comparing, building text in loops, and reading stdin.",
+  "quest": {
+    "title": "Messages in Bottles",
+    "story": "Every morning the lookout fishes bottles out of the sea. Each one holds a scrap of paper: orders, gossip, coordinates, and sometimes nonsense. The captain wants them decoded, cleaned up and logged, and you are the only deckhand who can read Rust.\n\nText is where many programs go wrong. Messages arrive with stray spaces, odd capitals and foreign letters like *ë* or *é*. Rust is strict about text: it is always valid UTF-8, a character can take several bytes, and the compiler won't let you pretend otherwise. That strictness pays off. Once your code compiles, it handles *Zoë* as well as *Zoe*.\n\nLearn the two kinds of text, `String` and `&str`, and the dozen methods you'll use every day. Then decode the captain's bottle post and you're ready to keep the ledger in Level 1."
+  },
+  "concepts": [
+    {
+      "title": "Two kinds of text: String and &str",
+      "body": "Rust has two everyday text types. Here's the mental model; Level 1 explains the rules behind it.\n\n- **`String`** is text you **own**: a growable buffer, like your own notebook. You can append to it and change it (if the variable is `mut`). Build or store text in a `String`.\n- **`&str`** (\"string slice\") is a **view** of text that lives somewhere else. String literals like `\"ahoy\"` are `&str`: their bytes are baked into the program. A `&str` can also look at all or part of a `String`.\n\n```rust\nlet greeting: &str = \"ahoy\";                 // a literal: a view, read-only\nlet mut log: String = String::from(\"rum\");   // owned and growable\nlog.push_str(\", gold\");\nlet view: &str = &log;                       // a view of the whole String\n```\n\nThe everyday rule for functions:\n\n```rust\nfn shout(text: &str) -> String {      // read text: take &str\n    format!(\"{}!\", text.to_uppercase())   // new text: return String\n}\n\nshout(\"ahoy\");          // a literal is already a &str\nshout(&log);            // a String: lend it with &\n```\n\nRead the `&` as \"let the function look at it\". Why that matters, and what would happen without it, is the topic of Level 1."
+    },
+    {
+      "title": "Making and growing Strings",
+      "body": "```rust\nlet a = String::from(\"gold\");     // from a literal\nlet b = \"rum\".to_string();        // same thing\nlet mut c = String::new();        // empty\nc.push('x');                      // push ONE char (single quotes)\nc.push_str(\"yz\");                 // push a &str (double quotes)\nc += \"!\";                         // also appends a &str\nlet d = format!(\"{a} and {b}\");   // \"gold and rum\": the usual way to combine\nlet e: &str = d.as_str();         // a &str view of a String (same as &d)\n```\n\n`+` works too, but it **uses up** the left `String`: `let s = a + \"-\" + &b;` leaves `a` unusable afterwards. Level 1 calls this a *move*. Until then, prefer `format!` for combining. It never uses anything up.\n\nMethods like `to_uppercase()`, `trim()` and `replace()` never change the original text. `to_uppercase` and `replace` return a **new** `String`, and `trim` returns a `&str` view:\n\n```rust\nlet loud = d.to_uppercase();   // d is unchanged\n```"
+    },
+    {
+      "title": "Length, bytes and chars",
+      "body": "Rust text is **UTF-8**. ASCII letters take 1 byte, but `é` takes 2 bytes, `€` 3 and `🦀` 4. `len()` counts **bytes**, not characters:\n\n```rust\nlet word = \"café\";\nword.len();             // 5 bytes\nword.chars().count();   // 4 chars\n```\n\nWalk the characters with `.chars()` and the raw bytes with `.bytes()`:\n\n```rust\nfor c in \"Zoë\".chars() {        // 'Z', 'o', 'ë'\n    if c.is_alphabetic() { /* … */ }\n}\n```\n\nHandy `char` methods: `is_alphabetic()`, `is_ascii_digit()`, `is_whitespace()`, `is_uppercase()`, `to_ascii_uppercase()`, `to_ascii_lowercase()`. `c.to_uppercase()` also exists, but because some letters become two characters (`ß` → `SS`) it returns several chars. Push them with `out.extend(c.to_uppercase())`.\n\nTo get the first character: `s.chars().next()`. It gives `Some(c)`, or `None` for empty text (more on that below)."
+    },
+    {
+      "title": "Slicing &s[a..b] and the UTF-8 trap",
+      "body": "A **slice** `&s[a..b]` is a view of the bytes from `a` up to (not including) `b`, with no copying:\n\n```rust\nlet line = \"gold: 30\";\nlet name = &line[0..4];    // \"gold\"\nlet rest = &line[6..];     // \"30\" (to the end)\nlet head = &line[..4];     // \"gold\" (from the start)\n```\n\nThe numbers are **byte** positions, and they must fall on a character boundary. Otherwise the program **panics** at runtime:\n\n```rust\nlet name = \"Zoë\";\nlet bad = &name[0..3];   // panic: byte index 3 is not a char boundary\n```\n\nThat is also why `s[0]` doesn't compile (E0277: `str` cannot be indexed by an integer): \"the 0th byte\" might be half a character. In practice you rarely compute byte positions yourself. Let `find`, `split`, `split_once` or `chars` find the positions, and they are always on a boundary."
+    },
+    {
+      "title": "Searching, trimming and transforming",
+      "body": "All of these leave the original untouched:\n\n```rust\nlet s = \"  Black Pearl  \";\ns.trim();                      // \"Black Pearl\" (also trim_start, trim_end)\ns.contains(\"Pearl\");           // true\ns.trim().starts_with(\"Black\"); // true (and ends_with)\ns.find('P');                   // Some(8): byte position, or None\ns.replace(\"Pearl\", \"Gull\");    // a new String\ns.to_lowercase();              // a new String\n\"ab\".repeat(3);                // \"ababab\"\n```\n\nSplitting gives you the pieces one by one. Use them in a `for` loop, or count them:\n\n```rust\nfor word in \"rum  and gold\".split_whitespace() { }   // \"rum\", \"and\", \"gold\"\nfor part in \"a,b,,c\".split(',') { }                  // \"a\", \"b\", \"\", \"c\"\nfor line in text.lines() { }                         // one line at a time\nlet n = text.lines().count();\nlet (key, value) = \"gold=30\".split_once('=').unwrap(); // (\"gold\", \"30\")\n```\n\n`split_once` gives `Some((before, after))`, or `None` if the separator is missing. 0C shows how to collect pieces into a list with `.collect()`."
+    },
+    {
+      "title": "Numbers from text, Option, and comparing",
+      "body": "`parse` turns text into a number, but it can fail, so it gives a `Result`: either `Ok(number)` or `Err(problem)`.\n\n```rust\nlet n: u32 = \"42\".parse().unwrap();            // 42; panics on bad input\nlet m: u32 = \"x7\".trim().parse().unwrap_or(0); // 0: a fallback instead of a panic\nif let Ok(k) = \" 12 \".trim().parse::<u32>() {  // only runs on success\n    println!(\"got {k}\");\n}\n```\n\nMethods that may find nothing, like `find`, `split_once` and `chars().next()`, give an `Option`: `Some(value)` or `None`. They use the same tools: `unwrap_or(…)`, `if let Some(x) = …`, or a `match`:\n\n```rust\nmatch line.split_once(':') {\n    Some((name, amount)) => println!(\"{name} = {amount}\"),\n    None => println!(\"not a pair\"),\n}\n```\n\n`unwrap()` means \"I'm sure it's there; panic if not\". Level 5 is all about `Option`, `Result` and doing this properly. Always `trim()` before `parse()`: `\" 42\".parse::<u32>()` fails.\n\nComparing: `==` works between `String` and `&str` in both directions. Comparison is exact and case-sensitive (`\"Rum\" != \"rum\"`); use `a.eq_ignore_ascii_case(b)` or lowercase both sides. `<` compares byte by byte, so all capitals sort before all lowercase letters: `\"Zebra\" < \"apple\"`."
+    },
+    {
+      "title": "Building text in a loop, and reading input",
+      "body": "Start with an empty `mut String` and append to it:\n\n```rust\nlet mut out = String::new();\nfor word in text.split_whitespace() {\n    if !out.is_empty() {\n        out.push(' ');          // a separator between, not after\n    }\n    out.push_str(word);\n}\n```\n\nOr append whole formatted lines with `out.push_str(&format!(\"{n}. {word}\\n\"));`.\n\nPrograms in the tutor can read their input (the **stdin** box next to Run, and the hidden test cases) with this recipe:\n\n```rust\nuse std::io::{self, Read};\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    for line in text.lines() {\n        // …\n    }\n}\n```\n\n`&mut text` lets `read_to_string` write into your `String` (Level 2), and `.unwrap()` panics if reading fails (Level 5). Until then, copy the recipe as it is."
+    }
+  ],
+  "visual": {
+    "steps": [
+      {
+        "line": 2,
+        "note": "A literal is a &str: a pointer and a length (4). The bytes are baked into the program, not the heap.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "greeting",
+                "name": "greeting",
+                "value": "&str len 4"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 3,
+        "note": "String::from copies the text into a heap buffer that log owns: pointer, length, capacity.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "greeting",
+                "name": "greeting",
+                "value": "&str len 4"
+              },
+              {
+                "id": "log",
+                "name": "log",
+                "value": "ptr len 3 cap 3"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"rum\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "log",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 4,
+        "note": "push_str grows the buffer. Here it was too small, so a bigger one was allocated.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "greeting",
+                "name": "greeting",
+                "value": "&str len 4"
+              },
+              {
+                "id": "log",
+                "name": "log",
+                "value": "ptr len 9 cap 9"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"rum, gold\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "log",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 5,
+        "note": "&log[0..3] is a view of bytes 0..3 of log's buffer. Nothing is copied.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "greeting",
+                "name": "greeting",
+                "value": "&str len 4"
+              },
+              {
+                "id": "log",
+                "name": "log",
+                "value": "ptr len 9 cap 9"
+              },
+              {
+                "id": "first",
+                "name": "first",
+                "value": "&str len 3"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"rum, gold\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "log",
+            "to": "h",
+            "kind": "own"
+          },
+          {
+            "from": "first",
+            "to": "h",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 6,
+        "note": "to_uppercase builds a brand-new String. log itself is unchanged.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "greeting",
+                "name": "greeting",
+                "value": "&str len 4"
+              },
+              {
+                "id": "log",
+                "name": "log",
+                "value": "ptr len 9 cap 9"
+              },
+              {
+                "id": "first",
+                "name": "first",
+                "value": "&str len 3"
+              },
+              {
+                "id": "loud",
+                "name": "loud",
+                "value": "ptr len 9 cap 9"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"rum, gold\""
+          },
+          {
+            "id": "h2",
+            "label": "\"RUM, GOLD\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "log",
+            "to": "h",
+            "kind": "own"
+          },
+          {
+            "from": "first",
+            "to": "h",
+            "kind": "borrow"
+          },
+          {
+            "from": "loud",
+            "to": "h2",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 8,
+        "note": "End of main: each String frees its own buffer. Views and literals free nothing.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "greeting",
+                "name": "greeting",
+                "value": "&str len 4",
+                "state": "dropped"
+              },
+              {
+                "id": "log",
+                "name": "log",
+                "value": "ptr len 9 cap 9",
+                "state": "dropped"
+              },
+              {
+                "id": "first",
+                "name": "first",
+                "value": "&str len 3",
+                "state": "dropped"
+              },
+              {
+                "id": "loud",
+                "name": "loud",
+                "value": "ptr len 9 cap 9",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"rum, gold\"",
+            "state": "freed"
+          },
+          {
+            "id": "h2",
+            "label": "\"RUM, GOLD\"",
+            "state": "freed"
+          }
+        ],
+        "arrows": []
+      }
+    ],
+    "title": "A String, a literal, and a slice",
+    "code": "fn main() {\n    let greeting = \"ahoy\";\n    let mut log = String::from(\"rum\");\n    log.push_str(\", gold\");\n    let first = &log[0..3];\n    let loud = log.to_uppercase();\n    println!(\"{greeting} {first} {loud}\");\n}"
+  },
+  "challenges": [
+    {
+      "id": "l0b-predict-len",
+      "title": "How long is a café?",
+      "kind": "predict",
+      "xp": 10,
+      "story": "A bottle from a French port. The lookout measures the message and gets two different answers.",
+      "prompt": "What does this program print?",
+      "starter": "fn main() {\n    let word = \"café\";\n    println!(\"{} {}\", word.len(), word.chars().count());\n    let loud = word.to_uppercase();\n    println!(\"{word} {loud}\");\n}\n",
+      "reference": "out-5-4-cafe",
+      "hints": [
+        "`len()` and `chars().count()` measure different things. Which one counts bytes?",
+        "In UTF-8, `é` needs two bytes. And does `to_uppercase()` change `word`, or return something new?",
+        "5 bytes, 4 chars. `to_uppercase` returns a new `String`, so `word` still prints in lowercase."
+      ],
+      "choices": [
+        {
+          "id": "out-4-4-cafe",
+          "label": "`4 4` then `café CAFÉ`"
+        },
+        {
+          "id": "out-5-4-cafe",
+          "label": "`5 4` then `café CAFÉ`"
+        },
+        {
+          "id": "out-5-4-loud",
+          "label": "`5 4` then `CAFÉ CAFÉ`"
+        },
+        {
+          "id": "out-4-5-cafe",
+          "label": "`4 5` then `café CAFÉ`"
+        }
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-5-4-cafe",
+        "output": "5 4\ncafé CAFÉ\n"
+      }
+    },
+    {
+      "id": "l0b-predict-slice",
+      "title": "Half a letter",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The lookout wants the first three letters of a sailor's name for the duty roster.",
+      "prompt": "What happens when you compile and run this program?",
+      "starter": "fn main() {\n    let name = \"Zoë Pike\";\n    let short = &name[0..3];\n    println!(\"{short}\");\n}\n",
+      "reference": "panics",
+      "hints": [
+        "Slice ranges are **byte** positions. How many bytes do `Z`, `o` and `ë` take?",
+        "`Z` and `o` take one byte each, and `ë` takes two. Where does byte 3 fall?",
+        "Byte 3 is in the middle of `ë`. Slicing there can't be checked at compile time, so it panics at runtime: \"byte index 3 is not a char boundary\"."
+      ],
+      "choices": [
+        {
+          "id": "out-zoe",
+          "label": "It prints `Zoë`"
+        },
+        {
+          "id": "out-zo",
+          "label": "It prints `Zo`"
+        },
+        {
+          "id": "E0277",
+          "label": "Compile error E0277: a `str` can't be indexed"
+        },
+        {
+          "id": "panics",
+          "label": "It compiles, but panics at runtime"
+        }
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "panics",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l0b-fix-greeting",
+      "title": "Fix the greeting",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The bosun's greeting program mixes up its kinds of text. *Rustc* lists three complaints.",
+      "prompt": "Make the program compile and print exactly:\n\n```text\nAhoy! Ferris (F)\n```\n\nRules:\n- `greeting` stays a `String` (keep the `: String` annotation).\n- Take the initial from `name` with `chars()`. Don't type a literal `F`.\n- Keep the `println!` line as it is.",
+      "starter": "fn main() {\n    let mut greeting: String = \"Ahoy\";\n    greeting.push_str('!');\n    let name = \"Ferris\";\n    let line = format!(\"{greeting} {name}\");\n    let initial = name[0];\n    println!(\"{line} ({initial})\");\n}\n",
+      "reference": "fn main() {\n    let mut greeting: String = String::from(\"Ahoy\");\n    greeting.push('!');\n    let name = \"Ferris\";\n    let line = format!(\"{greeting} {name}\");\n    let initial = name.chars().next().unwrap();\n    println!(\"{line} ({initial})\");\n}\n",
+      "hints": [
+        "Three errors, three different mix-ups: a `&str` where a `String` is expected, a `char` where a `&str` is expected, and indexing into text.",
+        "A literal is a `&str`. Turn it into a `String` with `String::from(…)` or `.to_string()`. `push_str` takes text in double quotes, and `push` takes one `char` in single quotes. Text can't be indexed with `[0]` (E0277).",
+        "`String::from(\"Ahoy\")`, `greeting.push('!')` (or `push_str(\"!\")`), and `name.chars().next().unwrap()` for the first character."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "prints the greeting",
+            "expected": "Ahoy! Ferris (F)\n"
+          }
+        ],
+        "require": [
+          {
+            "pattern": "chars\\(\\)",
+            "message": "Take the initial with chars(), as the rules say."
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "'F'|\"F\"",
+            "message": "Don't type the initial: take it from name."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l0b-complete-signals",
+      "title": "Signal flags",
+      "kind": "complete",
+      "xp": 15,
+      "story": "The signal officer needs three small text tools before the next ship comes into view.",
+      "prompt": "Implement the three functions. Each takes a `&str` and returns new text or a number:\n\n- `fn shout(s: &str) -> String`: trim the spaces at both ends, uppercase it, add `!`. `\"  ahoy there \"` → `\"AHOY THERE!\"`. Empty or blank input gives just `\"!\"`.\n- `fn count_vowels(s: &str) -> usize`: how many of the **characters** are one of `a e i o u`, upper or lower case. `\"Pearl\"` → 2.\n- `fn initials(name: &str) -> String`: the first character of every word (words are separated by any whitespace), uppercased. `\"anne  bonny\"` → `\"AB\"`, `\"\"` → `\"\"`.\n\nHidden tests call all three functions directly.",
+      "starter": "/// Trimmed, uppercased, with a \"!\" at the end.\nfn shout(s: &str) -> String {\n    todo!()\n}\n\n/// Number of vowels (a, e, i, o, u in any case).\nfn count_vowels(s: &str) -> usize {\n    todo!()\n}\n\n/// First letter of every word, uppercased.\nfn initials(name: &str) -> String {\n    todo!()\n}\n\nfn main() {\n    println!(\"{}\", shout(\"  ahoy there \"));\n    println!(\"{}\", count_vowels(\"Black Pearl\"));\n    println!(\"{}\", initials(\"jack sparrow\"));\n}\n",
+      "reference": "/// Trimmed, uppercased, with a \"!\" at the end.\nfn shout(s: &str) -> String {\n    format!(\"{}!\", s.trim().to_uppercase())\n}\n\n/// Number of vowels (a, e, i, o, u in any case).\nfn count_vowels(s: &str) -> usize {\n    let mut n = 0;\n    for c in s.chars() {\n        match c.to_ascii_lowercase() {\n            'a' | 'e' | 'i' | 'o' | 'u' => n += 1,\n            _ => {}\n        }\n    }\n    n\n}\n\n/// First letter of every word, uppercased.\nfn initials(name: &str) -> String {\n    let mut out = String::new();\n    for word in name.split_whitespace() {\n        if let Some(c) = word.chars().next() {\n            out.extend(c.to_uppercase());\n        }\n    }\n    out\n}\n\nfn main() {\n    println!(\"{}\", shout(\"  ahoy there \"));\n    println!(\"{}\", count_vowels(\"Black Pearl\"));\n    println!(\"{}\", initials(\"jack sparrow\"));\n}\n",
+      "hints": [
+        "`shout` is one line: chain `trim()` and `to_uppercase()` inside a `format!`. The other two walk the text: `for c in s.chars()` and `for word in name.split_whitespace()`.",
+        "For vowels, lowercase each char with `c.to_ascii_lowercase()` and `match` it against `'a' | 'e' | 'i' | 'o' | 'u'`. For initials, `word.chars().next()` gives `Some(first_char)`.",
+        "`format!(\"{}!\", s.trim().to_uppercase())`. Initials: `let mut out = String::new(); for word in name.split_whitespace() { if let Some(c) = word.chars().next() { out.extend(c.to_uppercase()); } } out`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn shout_trims_uppercases_and_exclaims() {\n        assert_eq!(shout(\"  ahoy there \"), \"AHOY THERE!\");\n        assert_eq!(shout(\"rum\"), \"RUM!\");\n    }\n\n    #[test]\n    fn shout_blank_is_just_the_bang() {\n        assert_eq!(shout(\"\"), \"!\");\n        assert_eq!(shout(\"   \"), \"!\");\n    }\n\n    #[test]\n    fn shout_handles_accents() {\n        assert_eq!(shout(\"café\"), \"CAFÉ!\");\n    }\n\n    #[test]\n    fn count_vowels_any_case() {\n        assert_eq!(count_vowels(\"Pearl\"), 2);\n        assert_eq!(count_vowels(\"AEIOU aeiou\"), 10);\n        assert_eq!(count_vowels(\"rhythm\"), 0);\n        assert_eq!(count_vowels(\"\"), 0);\n    }\n\n    #[test]\n    fn count_vowels_counts_chars_not_bytes() {\n        assert_eq!(count_vowels(\"Zoë ahoy\"), 3);\n    }\n\n    #[test]\n    fn initials_of_words() {\n        assert_eq!(initials(\"anne  bonny\"), \"AB\");\n        assert_eq!(initials(\"  jack sparrow  \"), \"JS\");\n        assert_eq!(initials(\"Mary Read\"), \"MR\");\n    }\n\n    #[test]\n    fn initials_of_nothing() {\n        assert_eq!(initials(\"\"), \"\");\n        assert_eq!(initials(\"   \"), \"\");\n    }\n\n    #[test]\n    fn initials_with_non_ascii_letters() {\n        assert_eq!(initials(\"émile zola\"), \"ÉZ\");\n    }\n}\n"
+      }
+    },
+    {
+      "id": "l0b-predict-compare",
+      "title": "Rum, rum and RUM",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The quartermaster compares cargo names, and his program's answers surprise him.",
+      "prompt": "What does this program print?",
+      "starter": "fn main() {\n    let cargo = String::from(\"Rum\");\n    let wanted = \"rum\";\n    println!(\"{}\", cargo == wanted);\n    println!(\"{}\", cargo.to_lowercase() == wanted);\n    println!(\"{}\", \"Zebra\" < \"apple\");\n}\n",
+      "reference": "out-false-true-true",
+      "hints": [
+        "Can a `String` be compared with a `&str` at all? (Yes. Both sides hold text.) Is the comparison case-sensitive?",
+        "`to_lowercase()` returns a new `String` with the same letters in lowercase. `<` compares strings byte by byte, and every uppercase ASCII letter has a smaller byte value than every lowercase one.",
+        "`\"Rum\" == \"rum\"` is false, `\"rum\" == \"rum\"` is true, and `'Z'` (90) comes before `'a'` (97), so `\"Zebra\" < \"apple\"` is true."
+      ],
+      "choices": [
+        {
+          "id": "out-false-true-true",
+          "label": "`false`, `true`, `true`"
+        },
+        {
+          "id": "out-false-true-false",
+          "label": "`false`, `true`, `false`"
+        },
+        {
+          "id": "out-true-true-false",
+          "label": "`true`, `true`, `false`"
+        },
+        {
+          "id": "E0277",
+          "label": "Compile error E0277: can't compare `String` with `&str`"
+        }
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-false-true-true",
+        "output": "false\ntrue\ntrue\n"
+      }
+    },
+    {
+      "id": "l0b-complete-tally",
+      "title": "The purser's tally",
+      "kind": "complete",
+      "xp": 15,
+      "story": "Bottles from the supply ships carry lists like `rum: 12`. Some lines are smudged.",
+      "prompt": "Implement the three functions:\n\n- `fn parse_amount(s: &str) -> u32`: the number in `s`, ignoring surrounding spaces. If it isn't a valid `u32`, return `0`. `\" 12 \"` → 12, `\"x\"` → 0.\n- `fn tally(text: &str) -> u32`: `text` has one entry per line in the form `name: amount`. Return the sum of all amounts. Lines without a `:` count as 0, and so do lines whose amount doesn't parse.\n- `fn tidy(s: &str) -> String`: collapse every run of whitespace into a single space and remove leading and trailing whitespace. `\"  rum   and\\tgold \"` → `\"rum and gold\"`.\n\nHidden tests call all three.",
+      "starter": "/// The number in s, or 0 if there is none.\nfn parse_amount(s: &str) -> u32 {\n    todo!()\n}\n\n/// Sum of the amounts in \"name: amount\" lines.\nfn tally(text: &str) -> u32 {\n    todo!()\n}\n\n/// Single spaces between words, none at the ends.\nfn tidy(s: &str) -> String {\n    todo!()\n}\n\nfn main() {\n    println!(\"{}\", tally(\"rum: 12\\ngold: 30\\nsmudged\\nmaps: x\"));\n    println!(\"[{}]\", tidy(\"  rum   and\\tgold \"));\n}\n",
+      "reference": "/// The number in s, or 0 if there is none.\nfn parse_amount(s: &str) -> u32 {\n    s.trim().parse().unwrap_or(0)\n}\n\n/// Sum of the amounts in \"name: amount\" lines.\nfn tally(text: &str) -> u32 {\n    let mut total = 0;\n    for line in text.lines() {\n        if let Some((_, amount)) = line.split_once(':') {\n            total += parse_amount(amount);\n        }\n    }\n    total\n}\n\n/// Single spaces between words, none at the ends.\nfn tidy(s: &str) -> String {\n    let mut out = String::new();\n    for word in s.split_whitespace() {\n        if !out.is_empty() {\n            out.push(' ');\n        }\n        out.push_str(word);\n    }\n    out\n}\n\nfn main() {\n    println!(\"{}\", tally(\"rum: 12\\ngold: 30\\nsmudged\\nmaps: x\"));\n    println!(\"[{}]\", tidy(\"  rum   and\\tgold \"));\n}\n",
+      "hints": [
+        "`parse` gives a `Result`. Which method turns it into a plain number with a fallback? And what must you do to `\" 12 \"` before parsing?",
+        "In `tally`, loop over `text.lines()`, and use `split_once(':')` to split each line into name and amount. It gives an `Option`, so use `if let Some((name, amount)) = …`. Reuse `parse_amount`. For `tidy`, `split_whitespace()` already ignores runs of spaces and tabs.",
+        "`s.trim().parse().unwrap_or(0)`. In `tidy`, push a `' '` before every word except the first: `if !out.is_empty() { out.push(' '); } out.push_str(word);`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn parse_amount_trims_and_parses() {\n        assert_eq!(parse_amount(\" 12 \"), 12);\n        assert_eq!(parse_amount(\"7\"), 7);\n    }\n\n    #[test]\n    fn parse_amount_bad_input_is_zero() {\n        assert_eq!(parse_amount(\"x\"), 0);\n        assert_eq!(parse_amount(\"\"), 0);\n        assert_eq!(parse_amount(\"-3\"), 0);\n        assert_eq!(parse_amount(\"1 2\"), 0);\n    }\n\n    #[test]\n    fn tally_sums_the_amounts() {\n        assert_eq!(tally(\"rum: 12\\ngold: 30\"), 42);\n    }\n\n    #[test]\n    fn tally_skips_smudged_lines() {\n        assert_eq!(tally(\"rum: 12\\nsmudged\\nmaps: x\\ngold:5\"), 17);\n    }\n\n    #[test]\n    fn tally_of_nothing_is_zero() {\n        assert_eq!(tally(\"\"), 0);\n    }\n\n    #[test]\n    fn tidy_collapses_whitespace() {\n        assert_eq!(tidy(\"  rum   and\\tgold \"), \"rum and gold\");\n        assert_eq!(tidy(\"one\"), \"one\");\n    }\n\n    #[test]\n    fn tidy_of_blank_is_empty() {\n        assert_eq!(tidy(\"\"), \"\");\n        assert_eq!(tidy(\" \\t \\n \"), \"\");\n    }\n}\n"
+      }
+    },
+    {
+      "id": "l0b-write-names",
+      "title": "Names on the roster",
+      "kind": "write",
+      "xp": 20,
+      "story": "The roster is a mess: `jACK sparrow`, `ANNE bonny`. The captain wants it tidy, and he wants to know which names read the same backwards.",
+      "prompt": "Write two functions:\n\n- `fn title_case(s: &str) -> String`: every word gets an uppercase first letter and lowercase for the rest, and words are separated by single spaces. `\"jACK   sparrow\"` → `\"Jack Sparrow\"`, `\"émile\"` → `\"Émile\"`, `\"\"` → `\"\"`.\n- `fn is_palindrome(s: &str) -> bool`: `true` if the **letters and digits** of `s`, compared case-insensitively, read the same forwards and backwards. Everything else (spaces, punctuation) is ignored. `\"Never odd or even\"` → `true`, `\"Rum\"` → `false`, `\"\"` → `true`.\n\nKeep a `fn main()`; it can print something or stay empty. Hidden tests call both. After they pass, the tutor judges whether your solution is idiomatic.",
+      "starter": "// Write title_case(s: &str) -> String and is_palindrome(s: &str) -> bool here.\n\nfn main() {}\n",
+      "reference": "fn title_case(s: &str) -> String {\n    let mut out = String::new();\n    for word in s.split_whitespace() {\n        if !out.is_empty() {\n            out.push(' ');\n        }\n        let mut chars = word.chars();\n        if let Some(first) = chars.next() {\n            out.extend(first.to_uppercase());\n            out.push_str(&chars.as_str().to_lowercase());\n        }\n    }\n    out\n}\n\nfn is_palindrome(s: &str) -> bool {\n    let mut letters = String::new();\n    for c in s.chars() {\n        if c.is_alphanumeric() {\n            letters.extend(c.to_lowercase());\n        }\n    }\n    let reversed: String = letters.chars().rev().collect();\n    letters == reversed\n}\n\nfn main() {\n    println!(\"{}\", title_case(\"jACK   sparrow\"));\n    println!(\"{}\", is_palindrome(\"Never odd or even\"));\n}\n",
+      "hints": [
+        "`title_case` is the \"build text in a loop\" pattern over `split_whitespace()`. For each word, treat the first char and the rest separately.",
+        "`let mut chars = word.chars();` then `chars.next()` takes the first char, and `chars.as_str()` is the rest of the word as a `&str`. For the palindrome, first build a `String` with only the lowercased letters and digits (`c.is_alphanumeric()`).",
+        "Reverse text by its chars: `let reversed: String = letters.chars().rev().collect();`, then compare with `==`. Never reverse bytes: that breaks multi-byte letters."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn title_case_fixes_mixed_case() {\n        assert_eq!(title_case(\"jACK   sparrow\"), \"Jack Sparrow\");\n        assert_eq!(title_case(\"ANNE bonny\"), \"Anne Bonny\");\n    }\n\n    #[test]\n    fn title_case_trims_and_handles_empty() {\n        assert_eq!(title_case(\"  mary  \"), \"Mary\");\n        assert_eq!(title_case(\"\"), \"\");\n    }\n\n    #[test]\n    fn title_case_non_ascii() {\n        assert_eq!(title_case(\"émile ZOLA\"), \"Émile Zola\");\n        assert_eq!(title_case(\"zoË\"), \"Zoë\");\n    }\n\n    #[test]\n    fn palindrome_ignores_case_spaces_and_punctuation() {\n        assert!(is_palindrome(\"Never odd or even\"));\n        assert!(is_palindrome(\"A man, a plan, a canal: Panama!\"));\n        assert!(is_palindrome(\"Abba\"));\n    }\n\n    #[test]\n    fn not_a_palindrome() {\n        assert!(!is_palindrome(\"Rum\"));\n        assert!(!is_palindrome(\"ab\"));\n    }\n\n    #[test]\n    fn empty_and_single_are_palindromes() {\n        assert!(is_palindrome(\"\"));\n        assert!(is_palindrome(\"x\"));\n        assert!(is_palindrome(\"?!\"));\n    }\n\n    #[test]\n    fn palindrome_with_multibyte_letters() {\n        assert!(is_palindrome(\"éxé\"));\n        assert!(!is_palindrome(\"éx\"));\n    }\n}\n"
+      },
+      "judge": "agent",
+      "rubric": "Idiomatic beginner text handling: parameters are `&str`, results are new `String`s. Words come from `split_whitespace()`, characters from `chars()`, never from byte indexes or `as u8` arithmetic, so non-ASCII letters work. Uppercasing uses `to_uppercase()`/`to_lowercase()` (or the char versions with `extend`), not hand-made ASCII tables. Building output uses `String::new()` plus `push`/`push_str`, or iterator `collect`/`join`; either is fine. The palindrome compares chars (e.g. a filtered lowercase `String` against its `chars().rev()`), not bytes. Deduct for slicing with computed byte offsets (`&word[1..]` is acceptable only because the first char's length is known via `chars()`/`char::len_utf8`), unnecessary `.to_string()`/`String::from` copies in loops, or `unwrap()` on values that can be empty."
+    },
+    {
+      "id": "l0b-boss-bottle",
+      "title": "Boss: Bottle post",
+      "kind": "boss",
+      "xp": 40,
+      "story": "A whole crate of bottles washed up overnight. The captain wants every message decoded before breakfast, and the lookout has already copied them into one long text.",
+      "prompt": "Write the decoder. The program reads **all of stdin** and handles it line by line:\n\n1. Trim the line. Skip it if it is empty or starts with `#` (a comment).\n2. Every other line is a message. A message looks like `verb: text`: split at the **first** `:`, then trim both parts. The verb is case-insensitive (`SHOUT`, `Shout`).\n3. Print one output line per message:\n   - `shout` → the text uppercased, followed by `!`\n   - `whisper` → the text lowercased, followed by `...`\n   - `reverse` → the text with its **characters** in reverse order\n   - `count` → `N words, M chars`, where words are separated by whitespace and chars are characters (not bytes) of the trimmed text\n   - anything else, or a line without `:` → `?? ` followed by the trimmed line\n4. Finally print `decoded X of Y messages`, where Y counts every message and X counts those that were not `??`.\n\nFor this input:\n\n```text\n# from the Black Pearl\nshout: ahoy there\nwhisper: The MAP is FAKE\n\nreverse: Zoë\ncount: rum  and   gold\ndance: jig\nno colon here\n```\n\nthe output is exactly:\n\n```text\nAHOY THERE!\nthe map is fake...\nëoZ\n3 words, 15 chars\n?? dance: jig\n?? no colon here\ndecoded 4 of 6 messages\n```\n\nThe hidden cases include empty input, padded and uppercase verbs, and non-ASCII text. Use the **stdin** box next to Run to try your own input.",
+      "starter": "use std::io::{self, Read};\n\n/// Decodes one message line (already trimmed, not blank, not a comment).\nfn decode(line: &str) -> String {\n    todo!()\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    // For every line: trim, skip blanks and comments, decode, print.\n    // At the end: \"decoded X of Y messages\".\n}\n",
+      "reference": "use std::io::{self, Read};\n\n/// Decodes one message line (already trimmed, not blank, not a comment).\n/// Unknown messages start with \"?? \".\nfn decode(line: &str) -> String {\n    let unknown = format!(\"?? {line}\");\n    let Some((verb, text)) = line.split_once(':') else {\n        return unknown;\n    };\n    let text = text.trim();\n    match verb.trim().to_lowercase().as_str() {\n        \"shout\" => format!(\"{}!\", text.to_uppercase()),\n        \"whisper\" => format!(\"{}...\", text.to_lowercase()),\n        \"reverse\" => text.chars().rev().collect(),\n        \"count\" => format!(\n            \"{} words, {} chars\",\n            text.split_whitespace().count(),\n            text.chars().count()\n        ),\n        _ => unknown,\n    }\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    let mut total = 0;\n    let mut decoded = 0;\n    for line in text.lines() {\n        let line = line.trim();\n        if line.is_empty() || line.starts_with('#') {\n            continue;\n        }\n        let out = decode(line);\n        total += 1;\n        if !out.starts_with(\"?? \") {\n            decoded += 1;\n        }\n        println!(\"{out}\");\n    }\n    println!(\"decoded {decoded} of {total} messages\");\n}\n",
+      "hints": [
+        "Split the work. `main` does the loop: `for line in text.lines()`, shadow `let line = line.trim();`, `continue` for blanks and comments, and count. `decode` handles a single message and returns the output line.",
+        "`line.split_once(':')` gives `Some((verb, text))` or `None`. For a case-insensitive verb, lowercase it and compare it, or `match` on `verb.trim().to_lowercase().as_str()` (a `match` on text needs a `&str`, which is what `as_str()` gives).",
+        "`reverse` must reverse **chars**: `text.chars().rev().collect::<String>()`. `count`: `text.split_whitespace().count()` words and `text.chars().count()` chars. Track `total` and `decoded` with two `mut` counters in `main`.",
+        "One shape for `decode`: `match line.split_once(':') { None => format!(\"?? {line}\"), Some((verb, text)) => { let text = text.trim(); match verb.trim().to_lowercase().as_str() { \"shout\" => format!(\"{}!\", text.to_uppercase()), /* … */ _ => format!(\"?? {line}\") } } }`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "the captain's crate",
+            "stdin": "# from the Black Pearl\nshout: ahoy there\nwhisper: The MAP is FAKE\n\nreverse: Zoë\ncount: rum  and   gold\ndance: jig\nno colon here\n",
+            "expected": "AHOY THERE!\nthe map is fake...\nëoZ\n3 words, 15 chars\n?? dance: jig\n?? no colon here\ndecoded 4 of 6 messages\n"
+          },
+          {
+            "name": "empty crate",
+            "stdin": "",
+            "expected": "decoded 0 of 0 messages\n"
+          },
+          {
+            "name": "padded and uppercase verbs",
+            "stdin": "   SHOUT :   yo ho\n\tWhisper:QUIET\n  # just a comment\nCount:\n",
+            "expected": "YO HO!\nquiet...\n0 words, 0 chars\ndecoded 3 of 3 messages\n"
+          },
+          {
+            "name": "non-ascii text and extra colons",
+            "stdin": "reverse: crème brûlée\ncount: crème brûlée\nshout: time: 12:00\n",
+            "expected": "eélûrb emèrc\n2 words, 12 chars\nTIME: 12:00!\ndecoded 3 of 3 messages\n"
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "l0b-card-two-strings",
+      "front": "`String` vs `&str`: which is which, and which do you use for a function parameter that only reads text?",
+      "back": "`String` is owned, growable text (a heap buffer). `&str` is a view of text that lives elsewhere: a literal or part of a `String`. Read-only parameters take `&str`. Pass a literal directly, or a `String` as `&s`. Return new text as `String`.",
+      "unlockAfter": "l0b-predict-len"
+    },
+    {
+      "id": "l0b-card-len",
+      "front": "`\"café\".len()` vs `\"café\".chars().count()`?",
+      "back": "`5` vs `4`. `len()` counts **bytes** of UTF-8, and `é` takes two. Count characters with `chars().count()`.",
+      "unlockAfter": "l0b-predict-len"
+    },
+    {
+      "id": "l0b-card-new-string",
+      "front": "After `let loud = word.to_uppercase();`, what is in `word`?",
+      "back": "The original text, unchanged. `to_uppercase`, `to_lowercase`, `replace` and `trim` never modify the original. They return a new `String` (`trim` returns a `&str` view).",
+      "unlockAfter": "l0b-predict-len"
+    },
+    {
+      "id": "l0b-card-slice",
+      "front": "What does `&\"Zoë\"[0..3]` do?",
+      "back": "It **panics** at runtime: \"byte index 3 is not a char boundary\". Slice ranges are byte positions, and `ë` occupies bytes 2–3. Let `find`/`split`/`chars` find positions for you.",
+      "unlockAfter": "l0b-predict-slice"
+    },
+    {
+      "id": "l0b-card-index",
+      "front": "Why doesn't `name[0]` compile for a `&str`, and how do you get the first character?",
+      "back": "E0277: `str` can't be indexed by an integer, because a byte might be half a character. Use `name.chars().next()`, which gives `Some(c)`, or `None` for empty text.",
+      "unlockAfter": "l0b-fix-greeting"
+    },
+    {
+      "id": "l0b-card-push",
+      "front": "`push` vs `push_str` on a `String`?",
+      "back": "`push('!')` appends one `char` (single quotes). `push_str(\"!!\")` appends a `&str` (double quotes). `s += \"x\"` also appends a `&str`. To combine several values, `format!` is usually clearest.",
+      "unlockAfter": "l0b-fix-greeting"
+    },
+    {
+      "id": "l0b-card-compare",
+      "front": "Is `String::from(\"Rum\") == \"rum\"`? And `\"Zebra\" < \"apple\"`?",
+      "back": "`false`: `==` works between `String` and `&str`, but it's case-sensitive. `true`: `<` compares bytes, and uppercase ASCII letters come before lowercase ones. Lowercase both sides, or use `eq_ignore_ascii_case`, for case-insensitive comparison.",
+      "unlockAfter": "l0b-predict-compare"
+    },
+    {
+      "id": "l0b-card-parse",
+      "front": "How do you turn `\" 42 \"` into a `u32`, falling back to 0 for bad input?",
+      "back": "`s.trim().parse::<u32>().unwrap_or(0)`. `parse` returns a `Result` (`Ok(n)` or `Err(e)`), and without `trim()` the spaces make it fail. `.unwrap()` would panic instead of falling back.",
+      "unlockAfter": "l0b-complete-tally"
+    },
+    {
+      "id": "l0b-card-split-once",
+      "front": "What does `\"gold: 30\".split_once(':')` return, and for `\"gold\"`?",
+      "back": "`Some((\"gold\", \" 30\"))`: the parts before and after the first `:`, untrimmed. For `\"gold\"`, `None`. Handle both with `if let Some((k, v)) = …` or `match`.",
+      "unlockAfter": "l0b-complete-tally"
+    },
+    {
+      "id": "l0b-card-reverse",
+      "front": "How do you reverse a string correctly?",
+      "back": "By characters: `s.chars().rev().collect::<String>()`. Reversing bytes would break multi-byte characters like `ë`.",
+      "unlockAfter": "l0b-write-names"
+    },
+    {
+      "id": "l0b-card-stdin",
+      "front": "The recipe to read all of stdin into a `String`?",
+      "back": "`use std::io::{self, Read};` then `let mut text = String::new(); io::stdin().read_to_string(&mut text).unwrap();`, and `for line in text.lines() { … }`.",
+      "unlockAfter": "l0b-boss-bottle"
+    }
+  ]
+}

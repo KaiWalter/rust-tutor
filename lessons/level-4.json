@@ -1,6 +1,8 @@
 {
   "id": "traits-generics",
-  "order": 4,
+  "order": 7,
+  "label": "4",
+  "section": "core",
   "title": "Traits & Generics",
   "summary": "Give different types shared behaviour with traits, write one function for many types with generics and bounds, and choose between static and dynamic dispatch.",
   "quest": {

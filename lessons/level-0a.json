@@ -1,0 +1,614 @@
+{
+  "id": "first-steps",
+  "order": 1,
+  "label": "0A",
+  "section": "prelude",
+  "title": "First Steps: Values, Functions & Control Flow",
+  "summary": "Variables, mutability and shadowing, number types, functions and return values, expressions vs statements, if/else and match as expressions (Rust's ternary), and loops.",
+  "quest": {
+    "title": "Learning the Ropes",
+    "story": "You have just signed on with the **Crab Fleet** as the greenest deckhand aboard. Before anyone trusts you with the ledger (that comes in Level 1), the bosun wants to see that you can read and write the ship's language: Rust.\n\nThe ship's computer is run by an old parrot named *Rustc*. It reads every program before it runs and squawks at anything suspicious. It looks fussy, but every squawk is a bug that will never reach the open sea.\n\nYour first watch is to learn how values are named and changed, how functions hand back answers, and how a Rust program makes decisions and repeats work. Pay special attention to one thing the bosun keeps repeating: **in Rust, almost everything is an expression and has a value.** That includes `if` and `match`, and it is why Rust doesn't need the `cond ? a : b` operator you may know from other languages.\n\nRing the ship's bells correctly at the end of this watch, and you're ready for strings."
+  },
+  "concepts": [
+    {
+      "title": "Your first program: main, println! and format!",
+      "body": "Every program starts in `fn main()`. `println!` prints a line. The `!` marks a **macro**: it is checked at compile time and expands into ordinary code.\n\n```rust\nfn main() {\n    let crew = 4;\n    let ship = \"Pearl\";\n    println!(\"Hello, crew!\");\n    println!(\"{} has {} hands\", ship, crew); // {} = next argument\n    println!(\"{ship} has {crew} hands\");     // same, the name goes inline\n    println!(\"{:?}\", (1, 2));                // {:?} = debug view, works on more types\n    println!(\"[{:>5}] [{:<5}] [{:05}]\", 42, 42, 42); // width/alignment/zero padding\n    println!(\"{:.2}\", 3.14159);              // 3.14: two decimals\n}\n```\n\n`format!` uses exactly the same placeholders, but **returns** the text as a `String` instead of printing it: `let tag = format!(\"{ship}-{crew}\");`. Level 0B covers what a `String` is.\n\nComments: `// to the end of the line`. `/// doc comment` documents the item below it. `todo!()` is a placeholder that compiles but panics if it runs. Many starters use it to mark the parts you fill in."
+    },
+    {
+      "title": "let, mut and shadowing",
+      "body": "`let` gives a value a name. Names are **immutable** by default:\n\n```rust\nlet gold = 10;\ngold = 12; // error[E0384]: cannot assign twice to immutable variable\n```\n\nAdd `mut` when you really want to change a variable in place:\n\n```rust\nlet mut gold = 10;\ngold += 2;       // 12; also -=, *=, /=, %=\n```\n\n**Shadowing** is different: a second `let` with the same name creates a **new** variable that hides the old one. The new one can even have a different type:\n\n```rust\nlet depth = \"12\";              // text\nlet depth = 12;                // a new variable, now a number\nlet depth = depth * 2;         // 24, still immutable\n```\n\nUse `mut` for a value that changes step by step (a counter, a running total). Use shadowing when you transform a value into the next stage and never need the old one again. You'll see `let log = add_line(log, …);` a lot in Level 1."
+    },
+    {
+      "title": "Number types, bool and char",
+      "body": "Every value has a type, and rustc usually infers it. You can always write it out: `let x: u32 = 5;`\n\n- `i32`: signed integer, the default for integer literals (`-7`, `42`)\n- `u32`, `u64`: unsigned, never negative (`7u32`)\n- `i64`: a bigger signed integer (`0i64`)\n- `usize`: sizes and indexes, e.g. what `.len()` returns\n- `f64`: floating point (`2.5`)\n- `bool`: `true` / `false`, e.g. `gold > 3`\n- `char`: one Unicode character in **single** quotes (`'a'`, `'🦀'`)\n\nRust never converts number types silently. `let x: f64 = some_u32;` is error **E0308** (mismatched types). Convert explicitly:\n\n```rust\nlet cups: u32 = 50;\nlet crew: u32 = 4;\nlet int_share = cups / crew;               // 12: integer division truncates\nlet rest = cups % crew;                    // 2: remainder\nlet share = cups as f64 / crew as f64;     // 12.5\nlet big = i64::from(cups);                 // lossless conversion\n```\n\nInteger overflow is a **panic** in the tutor's debug builds: `0u32 - 1` stops the program with \"attempt to subtract with overflow\". Use `a.saturating_sub(b)` when you want it to stop at 0. Other handy methods are `a.min(b)`, `a.max(b)`, `n.abs()` and `n.pow(2)`."
+    },
+    {
+      "title": "Functions and return values",
+      "body": "```rust\nfn share(total: u32, crew: u32) -> u32 {\n    if crew == 0 {\n        return 0;          // early exit with `return`\n    }\n    total / crew           // last expression, no `;`: this is the result\n}\n```\n\n- Every parameter needs a type. The return type comes after `->`. Without `->`, the function returns `()` (\"unit\", nothing).\n- The **last expression** of the body, without a semicolon, is the return value. `return` is only for leaving early.\n- Parameters are immutable too. Write `fn f(mut n: u32)` to change a parameter inside the function.\n- Functions can be declared in any order, before or after `main`.\n\nYou can call a function anywhere you can use a value: `println!(\"{}\", share(30, 4));`."
+    },
+    {
+      "title": "Expressions vs statements",
+      "body": "An **expression** produces a value: `5`, `a + b`, `share(30, 4)`, a block `{ … }`, an `if`, a `match`. A **statement** does something and produces nothing: `let x = 5;`, or any expression followed by `;`.\n\nA block `{ … }` has the value of its last expression:\n\n```rust\nlet y = {\n    let a = 2;\n    a * 3        // no semicolon: the block is worth 6\n};\n```\n\nThat one semicolon matters. Put it after the last line of a function and the body ends in a **statement**, so it is worth `()`:\n\n```rust\nfn double(n: i32) -> i32 {\n    n * 2;       // error[E0308]: mismatched types: expected `i32`, found `()`\n}\n```\n\nrustc even suggests \"remove this semicolon to return this value\". Rule of thumb: the last line of a block that should produce a value has **no** `;`."
+    },
+    {
+      "title": "if is an expression: Rust's ternary",
+      "body": "Rust has **no** `cond ? a : b` operator. It doesn't need one, because `if`/`else` is itself an expression:\n\n```rust\nlet rank = if gold > 50 { \"captain\" } else { \"deckhand\" };\nlet fee = if member { 0 } else { 5 } + base;\nprintln!(\"{} bell{}\", n, if n == 1 { \"\" } else { \"s\" });\n```\n\nThe rules that make it work:\n\n- Both branches must have the **same type**. `if c { 1 } else { \"one\" }` is E0308.\n- When you use the value, the `else` is **required**. `let x = if c { 1 };` is error E0317, because there is no value when `c` is false.\n- The condition must be a real `bool`. `if n { … }` with a number is E0308. Write `if n != 0`.\n- `else if` chains work as you'd expect, and the whole chain is still one expression:\n\n```rust\nlet wind = if speed == 0 { \"calm\" } else if speed < 20 { \"breeze\" } else { \"gale\" };\n```\n\nThe braces are mandatory, and the condition needs no parentheses."
+    },
+    {
+      "title": "match as an expression",
+      "body": "`match` compares a value against **patterns** from top to bottom and evaluates the first arm that fits. Like `if`, it is an expression:\n\n```rust\nlet mood = match gold % 10 {\n    0 => \"round\",\n    1 | 2 | 3 => \"low\",     // | means \"or\"\n    4..=6 => \"middling\",    // inclusive range\n    _ => \"high\",            // _ matches anything else\n};\n```\n\nA `match` must be **exhaustive**: every possible value needs an arm. For numbers that almost always means a final `_` arm. Otherwise rustc stops with **E0004** (non-exhaustive patterns). All arms must have the same type. An arm can also be a block: `0 => { println!(\"empty\"); 0 }`.\n\nPrefer `match` over long `else if` chains when you compare **one** value against several constants or ranges. Level 3 shows its real power with enums."
+    },
+    {
+      "title": "Loops: loop, while and for",
+      "body": "```rust\nlet mut n = 1;\nlet first_big = loop {          // loop forever until break\n    n *= 3;\n    if n > 20 { break n; }      // break can carry a value out\n};\n\nlet mut fuel = 3;\nwhile fuel > 0 {                // repeat while the condition holds\n    fuel -= 1;\n}\n\nfor i in 0..3 { }               // 0, 1, 2   (end excluded)\nfor i in 1..=3 { }              // 1, 2, 3   (end included)\nfor i in (1..=3).rev() { }      // 3, 2, 1\n```\n\n`continue` skips to the next round, and `break` leaves the loop. `for` is the everyday loop. It also walks over lists and text, which you'll meet in 0B and 0C. Only `loop` can produce a value with `break value`, because only `loop` is guaranteed to end through a `break`."
+    }
+  ],
+  "visual": {
+    "steps": [
+      {
+        "line": 2,
+        "note": "main gets a stack frame. gold is an i32 that lives directly in it.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 3,
+        "note": "crew is declared mut, so it may change later.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40"
+              },
+              {
+                "id": "crew",
+                "name": "crew",
+                "value": "3 (mut)"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 4,
+        "note": "crew += 1 changes the same slot in place. Only allowed because of mut.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40"
+              },
+              {
+                "id": "crew",
+                "name": "crew",
+                "value": "4 (mut)"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 9,
+        "note": "Calling split pushes a new frame. The arguments are copied into total and n.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40"
+              },
+              {
+                "id": "crew",
+                "name": "crew",
+                "value": "4 (mut)"
+              }
+            ]
+          },
+          {
+            "frame": "split",
+            "vars": [
+              {
+                "id": "total",
+                "name": "total",
+                "value": "40"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "4"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 9,
+        "note": "The body's last expression, total / n, is the return value. Integer division gives 10.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40"
+              },
+              {
+                "id": "crew",
+                "name": "crew",
+                "value": "4 (mut)"
+              }
+            ]
+          },
+          {
+            "frame": "split",
+            "vars": [
+              {
+                "id": "total",
+                "name": "total",
+                "value": "40"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "4"
+              },
+              {
+                "id": "result",
+                "name": "result",
+                "value": "10"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 5,
+        "note": "split's frame is gone. Its result became share.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40"
+              },
+              {
+                "id": "crew",
+                "name": "crew",
+                "value": "4 (mut)"
+              },
+              {
+                "id": "share",
+                "name": "share",
+                "value": "10"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 6,
+        "note": "if/else is an expression: 10 > 5, so the whole if is worth \"rich\".",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40"
+              },
+              {
+                "id": "crew",
+                "name": "crew",
+                "value": "4 (mut)"
+              },
+              {
+                "id": "share",
+                "name": "share",
+                "value": "10"
+              },
+              {
+                "id": "rank",
+                "name": "rank",
+                "value": "&str \"rich\""
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 7,
+        "note": "Shadowing: a NEW gold (30) hides the old one. The old value is unreachable (faded) until main ends.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40",
+                "state": "dropped"
+              },
+              {
+                "id": "crew",
+                "name": "crew",
+                "value": "4 (mut)"
+              },
+              {
+                "id": "share",
+                "name": "share",
+                "value": "10"
+              },
+              {
+                "id": "rank",
+                "name": "rank",
+                "value": "&str \"rich\""
+              },
+              {
+                "id": "gold2",
+                "name": "gold",
+                "value": "30"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 8,
+        "note": "End of main: the whole frame is popped. Stack values need no cleanup.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "gold",
+                "name": "gold",
+                "value": "40",
+                "state": "dropped"
+              },
+              {
+                "id": "crew",
+                "name": "crew",
+                "value": "4",
+                "state": "dropped"
+              },
+              {
+                "id": "share",
+                "name": "share",
+                "value": "10",
+                "state": "dropped"
+              },
+              {
+                "id": "rank",
+                "name": "rank",
+                "value": "&str \"rich\"",
+                "state": "dropped"
+              },
+              {
+                "id": "gold2",
+                "name": "gold",
+                "value": "30",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      }
+    ],
+    "title": "Values on the stack, a function call, and if as a value",
+    "code": "fn main() {\n    let gold = 40;\n    let mut crew = 3;\n    crew += 1;\n    let share = split(gold, crew);\n    let rank = if share > 5 { \"rich\" } else { \"poor\" };\n    let gold = gold - share;\n}\nfn split(total: i32, n: i32) -> i32 { total / n }"
+  },
+  "challenges": [
+    {
+      "id": "l0a-predict-ternary",
+      "title": "Captain or deckhand?",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The bosun sorts new hands by the gold in their purse, and his sorting program looks odd to you. Where is the `? :`?",
+      "prompt": "Read the program. What does it print?",
+      "starter": "fn main() {\n    let gold = 42;\n    let rank = if gold > 50 { \"captain\" } else { \"deckhand\" };\n    let mood = match gold % 10 {\n        0 => \"round\",\n        1..=4 => \"low\",\n        _ => \"high\",\n    };\n    println!(\"{rank} {mood}\");\n}\n",
+      "reference": "out-deckhand-low",
+      "hints": [
+        "Both `if` and `match` are expressions here: each one produces a value that goes straight into a `let`.",
+        "Is 42 greater than 50? And what is `42 % 10`, the remainder after dividing by 10?",
+        "`gold > 50` is false, so `rank` is `\"deckhand\"`. `42 % 10` is 2, which falls into `1..=4`."
+      ],
+      "choices": [
+        {
+          "id": "out-deckhand-low",
+          "label": "`deckhand low`"
+        },
+        {
+          "id": "out-captain-low",
+          "label": "`captain low`"
+        },
+        {
+          "id": "out-deckhand-high",
+          "label": "`deckhand high`"
+        },
+        {
+          "id": "E0308",
+          "label": "Compile error: `if` can't produce a value. You'd need `gold > 50 ? \"captain\" : \"deckhand\"`"
+        }
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-deckhand-low",
+        "output": "deckhand low\n"
+      }
+    },
+    {
+      "id": "l0a-predict-semicolon",
+      "title": "One semicolon too many",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The cook wrote a function to double the rum ration. *Rustc* squawks before the program even runs.",
+      "prompt": "What happens when you compile and run this program?",
+      "starter": "fn double(n: i32) -> i32 {\n    n * 2;\n}\n\nfn main() {\n    println!(\"{}\", double(21));\n}\n",
+      "reference": "E0308",
+      "hints": [
+        "What is the value of a block whose last line ends with a semicolon?",
+        "`n * 2;` is a statement, so the body produces `()`. The signature promises an `i32`.",
+        "rustc rejects the mismatch at compile time: expected `i32`, found `()`. Removing the `;` fixes it."
+      ],
+      "choices": [
+        {
+          "id": "out-42",
+          "label": "It prints `42`"
+        },
+        {
+          "id": "out-0",
+          "label": "It prints `0`: the function falls off the end and returns the default"
+        },
+        {
+          "id": "E0308",
+          "label": "Compile error E0308: mismatched types, the body evaluates to `()`"
+        },
+        {
+          "id": "panics",
+          "label": "It compiles, but panics when `double` returns nothing"
+        }
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "E0308",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l0a-fix-rations",
+      "title": "Fix the ration sheet",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The purser's ration program counts barrels and splits the rum between the crew. It doesn't compile, and *Rustc* has two complaints.",
+      "prompt": "Make the program compile and print exactly:\n\n```text\n5 barrels, 50 cups, 12.5 each\n```\n\nRules:\n- Keep `barrels`, `crew` and `cups` as integers and keep `crew: u32`.\n- Compute `each` from `cups` and `crew` with an `as f64` conversion. Don't type `12.5` into the code.\n- Don't change the `println!` line.",
+      "starter": "fn main() {\n    let barrels = 3;\n    barrels += 2;\n    let crew: u32 = 4;\n    let cups = barrels * 10;\n    let each: f64 = cups / crew;\n    println!(\"{barrels} barrels, {cups} cups, {each:.1} each\");\n}\n",
+      "reference": "fn main() {\n    let mut barrels = 3;\n    barrels += 2;\n    let crew: u32 = 4;\n    let cups = barrels * 10;\n    let each: f64 = cups as f64 / crew as f64;\n    println!(\"{barrels} barrels, {cups} cups, {each:.1} each\");\n}\n",
+      "hints": [
+        "There are two errors. Read each one: one is about changing a variable, the other is about types.",
+        "`barrels` is changed after it is created, so it must be declared `mut` (E0384). `cups / crew` is an integer division whose result is a `u32`, and `each` wants an `f64` (E0308).",
+        "`let mut barrels = 3;` and `let each: f64 = cups as f64 / crew as f64;`. Converting only the result (`(cups / crew) as f64`) would give `12.0`, because the integer division already threw away the `.5`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "prints the ration sheet",
+            "expected": "5 barrels, 50 cups, 12.5 each\n"
+          }
+        ],
+        "require": [
+          {
+            "pattern": "as f64",
+            "message": "Convert with `as f64`, as the rules say."
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "12\\.5",
+            "message": "Compute 12.5, don't type it in."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l0a-predict-loop",
+      "title": "Tripling the catch",
+      "kind": "predict",
+      "xp": 10,
+      "story": "A fisherman's tally program: the catch triples every day until the hold is full, and then the log number is written backwards.",
+      "prompt": "What does this program print?",
+      "starter": "fn main() {\n    let mut n = 1;\n    let full = loop {\n        if n >= 20 {\n            break n;\n        }\n        n *= 3;\n    };\n    let mut log = 0;\n    for i in (1..4).rev() {\n        log = log * 10 + i;\n    }\n    println!(\"{full} {log}\");\n}\n",
+      "reference": "out-27-321",
+      "hints": [
+        "Trace `n` by hand: 1, then 3, … When does `n >= 20` first hold? `break n` hands that value out of the `loop`.",
+        "`1..4` is 1, 2, 3 (the end is excluded), and `.rev()` walks it backwards.",
+        "`n` goes 1 → 3 → 9 → 27, and 27 is the first value ≥ 20. `log` goes 3 → 32 → 321."
+      ],
+      "choices": [
+        {
+          "id": "out-27-321",
+          "label": "`27 321`"
+        },
+        {
+          "id": "out-20-321",
+          "label": "`20 321`"
+        },
+        {
+          "id": "out-27-4321",
+          "label": "`27 4321`"
+        },
+        {
+          "id": "out-9-123",
+          "label": "`9 123`"
+        }
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-27-321",
+        "output": "27 321\n"
+      }
+    },
+    {
+      "id": "l0a-complete-helm",
+      "title": "Decisions at the helm",
+      "kind": "complete",
+      "xp": 15,
+      "story": "The helmsman needs three tiny functions for the instruments. The bosun's rule: no `return` keyword anywhere. Let `if` and `match` produce the values.",
+      "prompt": "Implement the three functions, using `if`/`else` and `match` **as expressions**. The keyword `return` is not allowed in this challenge.\n\n- `fn larger(a: i32, b: i32) -> i32`: the larger of the two numbers.\n- `fn sign(n: i32) -> i32`: `-1` for negative numbers, `0` for zero, `1` for positive numbers.\n- `fn wind(knots: u32) -> &'static str`: `\"calm\"` for 0, `\"breeze\"` for 1 to 19, `\"gale\"` for 20 to 49, and `\"storm\"` for 50 and above.\n\n`&'static str` is the type of text written in quotes in your program: it lives for the whole run. Just return literals like `\"calm\"`. Level 2 explains the `'static` part.\n\nHidden tests call all three functions directly.",
+      "starter": "/// The larger of two numbers.\nfn larger(a: i32, b: i32) -> i32 {\n    todo!()\n}\n\n/// -1, 0 or 1, depending on the sign of n.\nfn sign(n: i32) -> i32 {\n    todo!()\n}\n\n/// A name for the wind speed.\nfn wind(knots: u32) -> &'static str {\n    todo!()\n}\n\nfn main() {\n    println!(\"{} {} {}\", larger(3, 9), sign(-4), wind(25));\n}\n",
+      "reference": "/// The larger of two numbers.\nfn larger(a: i32, b: i32) -> i32 {\n    if a > b {\n        a\n    } else {\n        b\n    }\n}\n\n/// -1, 0 or 1, depending on the sign of n.\nfn sign(n: i32) -> i32 {\n    if n < 0 {\n        -1\n    } else if n == 0 {\n        0\n    } else {\n        1\n    }\n}\n\n/// A name for the wind speed.\nfn wind(knots: u32) -> &'static str {\n    match knots {\n        0 => \"calm\",\n        1..=19 => \"breeze\",\n        20..=49 => \"gale\",\n        _ => \"storm\",\n    }\n}\n\nfn main() {\n    println!(\"{} {} {}\", larger(3, 9), sign(-4), wind(25));\n}\n",
+      "hints": [
+        "The value of a function is its last expression. If that last expression is an `if` or a `match`, its value is returned.",
+        "`sign` needs three branches: `if … { } else if … { } else { }`. For `wind`, `match` on `knots` with range patterns like `1..=19` and a final `_`.",
+        "`larger`: `if a > b { a } else { b }`. `wind`: `match knots { 0 => \"calm\", 1..=19 => \"breeze\", 20..=49 => \"gale\", _ => \"storm\" }`."
+      ],
+      "check": {
+        "kind": "tests",
+        "forbid": [
+          {
+            "pattern": "\\breturn\\b",
+            "message": "No `return` in this challenge: let the if/match expression be the function's last expression."
+          }
+        ],
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn larger_picks_the_bigger_number() {\n        assert_eq!(larger(3, 9), 9);\n        assert_eq!(larger(9, 3), 9);\n        assert_eq!(larger(-5, -2), -2);\n    }\n\n    #[test]\n    fn larger_of_equal_numbers() {\n        assert_eq!(larger(7, 7), 7);\n    }\n\n    #[test]\n    fn sign_of_negative_zero_positive() {\n        assert_eq!(sign(-40), -1);\n        assert_eq!(sign(0), 0);\n        assert_eq!(sign(12), 1);\n    }\n\n    #[test]\n    fn wind_names_each_band() {\n        assert_eq!(wind(0), \"calm\");\n        assert_eq!(wind(5), \"breeze\");\n        assert_eq!(wind(30), \"gale\");\n        assert_eq!(wind(80), \"storm\");\n    }\n\n    #[test]\n    fn wind_band_edges() {\n        assert_eq!(wind(1), \"breeze\");\n        assert_eq!(wind(19), \"breeze\");\n        assert_eq!(wind(20), \"gale\");\n        assert_eq!(wind(49), \"gale\");\n        assert_eq!(wind(50), \"storm\");\n    }\n}\n"
+      }
+    },
+    {
+      "id": "l0a-write-collatz",
+      "title": "The navigator's riddle",
+      "kind": "write",
+      "xp": 20,
+      "story": "The navigator passes the long night watches with an old riddle: take a number. If it's even, halve it. If it's odd, triple it and add one. Repeat until you reach 1. How many steps does it take?",
+      "prompt": "Write two functions:\n\n- `fn steps_to_one(n: u64) -> u32`: how many steps the rule needs to bring `n` down to 1. The rule is: even → `n / 2`, odd → `3 * n + 1`. `steps_to_one(1)` is `0`, and `steps_to_one(6)` is `8` (6 → 3 → 10 → 5 → 16 → 8 → 4 → 2 → 1). `n` is always at least 1.\n- `fn longest_start(limit: u64) -> u64`: the starting number in `1..limit` (the limit itself excluded) that needs the **most** steps. On a tie, the smaller number wins. `limit` is always at least 2.\n\nKeep a `fn main()`; it can print something or stay empty. Hidden tests call both functions. After they pass, the tutor judges whether your solution is idiomatic.",
+      "starter": "// Write steps_to_one(n: u64) -> u32 and longest_start(limit: u64) -> u64 here.\n\nfn main() {}\n",
+      "reference": "fn steps_to_one(mut n: u64) -> u32 {\n    let mut steps = 0;\n    while n != 1 {\n        n = if n % 2 == 0 { n / 2 } else { 3 * n + 1 };\n        steps += 1;\n    }\n    steps\n}\n\nfn longest_start(limit: u64) -> u64 {\n    let mut best = 1;\n    let mut best_steps = 0;\n    for start in 1..limit {\n        let steps = steps_to_one(start);\n        if steps > best_steps {\n            best = start;\n            best_steps = steps;\n        }\n    }\n    best\n}\n\nfn main() {\n    println!(\"{}\", steps_to_one(27));\n    println!(\"{}\", longest_start(100));\n}\n",
+      "hints": [
+        "`steps_to_one` repeats until `n` is 1, so a `while n != 1` loop and a counter fit well. To change the parameter, declare it `mut n: u64`.",
+        "The next value is a choice between two expressions, which is exactly what `if … { } else { }` is for: `n = if n % 2 == 0 { … } else { … };`.",
+        "For `longest_start`, loop `for start in 1..limit`, and keep the best start and its step count in two `mut` variables. Update them only when the new count is strictly greater, so ties keep the smaller start."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn one_needs_no_steps() {\n        assert_eq!(steps_to_one(1), 0);\n    }\n\n    #[test]\n    fn small_numbers() {\n        assert_eq!(steps_to_one(2), 1);\n        assert_eq!(steps_to_one(6), 8);\n        assert_eq!(steps_to_one(7), 16);\n    }\n\n    #[test]\n    fn twenty_seven_takes_a_long_trip() {\n        assert_eq!(steps_to_one(27), 111);\n    }\n\n    #[test]\n    fn longest_start_below_ten_is_nine() {\n        assert_eq!(longest_start(10), 9);\n    }\n\n    #[test]\n    fn longest_start_below_two_is_one() {\n        assert_eq!(longest_start(2), 1);\n    }\n\n    #[test]\n    fn longest_start_below_one_hundred() {\n        assert_eq!(longest_start(100), 97);\n    }\n\n    #[test]\n    fn ties_keep_the_smaller_start() {\n        // 18 and 19 both need 20 steps, the most below 20\n        assert_eq!(steps_to_one(18), steps_to_one(19));\n        assert_eq!(longest_start(20), 18);\n    }\n}\n"
+      },
+      "judge": "agent",
+      "rubric": "Idiomatic, beginner-level Rust: a `while`/`loop` with the next value chosen by an `if`/`else` **expression** (e.g. `n = if n % 2 == 0 { n / 2 } else { 3 * n + 1 };`) or a `match` expression, a `mut` parameter or one local `mut` copy, and the result as the last expression without `return` at the end. `longest_start` uses a `for` loop over a range (or an iterator such as `max_by_key` with care for ties) and keeps ties on the smaller start. Deduct for recursion that can overflow the stack, needless `as` casts between integer types, magic numbers, or mutating more variables than needed. Do not deduct for using explicit loops instead of iterator adapters."
+    },
+    {
+      "id": "l0a-boss-bells",
+      "title": "Boss: The Ship's Bells",
+      "kind": "boss",
+      "xp": 40,
+      "story": "At sea, time is kept by the **ship's bell**. It is struck every half hour: 1 bell at half past, 2 bells on the hour after, up to 8 bells at the end of each four-hour watch, and then it starts again. The old bell program was written by a sailor who missed the `? :` operator from another language, and it doesn't even compile.",
+      "prompt": "Fix and finish the bell program. Time is given as `minutes` after midnight, from 0 to 1439. Hidden tests call these four functions; keep their signatures:\n\n- `fn bells(minutes: u32) -> u32`: only on a full or half hour (`minutes % 30 == 0`) is the bell struck, otherwise it's `0`. Count the half hours since midnight and keep the remainder after dividing by 8; a remainder of 0 means **8** bells. `00:30` → 1, `04:00` → 8, `04:30` → 1, `00:00` → 8, `00:10` → 0.\n- `fn watch(minutes: u32) -> &'static str`: by the hour (`minutes / 60`): 0–3 `\"middle\"`, 4–7 `\"morning\"`, 8–11 `\"forenoon\"`, 12–15 `\"afternoon\"`, 16–17 `\"first dog\"`, 18–19 `\"last dog\"`, 20–23 `\"first\"`.\n- `fn clock(minutes: u32) -> String`: `HH:MM` with leading zeros, e.g. `04:05`, `23:30`.\n- `fn log_line(minutes: u32) -> String`: `\"{clock} {watch} watch, {n} bell\"` with `bells` instead of `bell` when n is not 1, and `\"no bell\"` when n is 0. Examples:\n\n```text\n04:30 morning watch, 1 bell\n12:00 afternoon watch, 8 bells\n16:10 first dog watch, no bell\n```\n\nThere is no `?:` in Rust: use `if`/`else` expressions. `main` may print whatever you like.",
+      "starter": "/// Bells struck at this time: 1..=8 on the half hour, otherwise 0.\nfn bells(minutes: u32) -> u32 {\n    let half_hours = minutes / 30;\n    let n = if minutes % 30 != 0 { 0 };\n    n\n}\n\n/// The name of the watch for this time.\nfn watch(minutes: u32) -> &'static str {\n    match minutes / 60 {\n        0..=3 => \"middle\",\n        4..=7 => \"morning\",\n        8..=11 => \"forenoon\",\n        12..=15 => \"afternoon\",\n        16 | 17 => \"first dog\",\n        18 | 19 => \"last dog\",\n    }\n}\n\n/// HH:MM with leading zeros.\nfn clock(minutes: u32) -> String {\n    format!(\"{}:{}\", minutes / 60, minutes % 60);\n}\n\n/// \"04:30 morning watch, 1 bell\"\nfn log_line(minutes: u32) -> String {\n    let n = bells(minutes);\n    let plural = n == 1 ? \"\" : \"s\";\n    format!(\"{} {} watch, {} bell{}\", clock(minutes), watch(minutes), n, plural)\n}\n\nfn main() {\n    let mut t = 0;\n    while t < 24 * 60 {\n        println!(\"{}\", log_line(t));\n        t += 90;\n    }\n}\n",
+      "reference": "/// Bells struck at this time: 1..=8 on the half hour, otherwise 0.\nfn bells(minutes: u32) -> u32 {\n    let half_hours = minutes / 30;\n    if minutes % 30 != 0 {\n        0\n    } else if half_hours % 8 == 0 {\n        8\n    } else {\n        half_hours % 8\n    }\n}\n\n/// The name of the watch for this time.\nfn watch(minutes: u32) -> &'static str {\n    match minutes / 60 {\n        0..=3 => \"middle\",\n        4..=7 => \"morning\",\n        8..=11 => \"forenoon\",\n        12..=15 => \"afternoon\",\n        16 | 17 => \"first dog\",\n        18 | 19 => \"last dog\",\n        _ => \"first\",\n    }\n}\n\n/// HH:MM with leading zeros.\nfn clock(minutes: u32) -> String {\n    format!(\"{:02}:{:02}\", minutes / 60, minutes % 60)\n}\n\n/// \"04:30 morning watch, 1 bell\"\nfn log_line(minutes: u32) -> String {\n    let n = bells(minutes);\n    let count = if n == 0 {\n        String::from(\"no bell\")\n    } else {\n        format!(\"{} bell{}\", n, if n == 1 { \"\" } else { \"s\" })\n    };\n    format!(\"{} {} watch, {}\", clock(minutes), watch(minutes), count)\n}\n\nfn main() {\n    let mut t = 0;\n    while t < 24 * 60 {\n        println!(\"{}\", log_line(t));\n        t += 90;\n    }\n}\n",
+      "hints": [
+        "Fix the compile errors first, in the order rustc reports them. The very first one is a syntax error: Rust has no `? :` operator. What expression gives you \"this value or that value\"?",
+        "After that: an `if` used as a value needs an `else` (E0317); a `match` on a number needs a final `_` arm (E0004); and a function whose last line ends in `;` returns `()` (E0308).",
+        "Once it compiles, the tests check the details. `{:02}` pads a number to two digits with zeros. `bells` needs three cases: not on a half hour → 0, remainder 0 → 8, otherwise the remainder. `log_line` needs a third case for `\"no bell\"`.",
+        "`bells`: `if minutes % 30 != 0 { 0 } else if half_hours % 8 == 0 { 8 } else { half_hours % 8 }`. `log_line`: `let count = if n == 0 { String::from(\"no bell\") } else { format!(\"{} bell{}\", n, if n == 1 { \"\" } else { \"s\" }) };`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn bells_on_the_half_hours() {\n        assert_eq!(bells(30), 1);\n        assert_eq!(bells(60), 2);\n        assert_eq!(bells(210), 7);\n        assert_eq!(bells(240), 8);\n        assert_eq!(bells(270), 1);\n    }\n\n    #[test]\n    fn midnight_is_eight_bells() {\n        assert_eq!(bells(0), 8);\n        assert_eq!(bells(1200), 8);\n    }\n\n    #[test]\n    fn no_bell_between_half_hours() {\n        assert_eq!(bells(10), 0);\n        assert_eq!(bells(1439), 0);\n    }\n\n    #[test]\n    fn every_watch_has_a_name() {\n        assert_eq!(watch(0), \"middle\");\n        assert_eq!(watch(239), \"middle\");\n        assert_eq!(watch(240), \"morning\");\n        assert_eq!(watch(600), \"forenoon\");\n        assert_eq!(watch(720), \"afternoon\");\n        assert_eq!(watch(960), \"first dog\");\n        assert_eq!(watch(1080), \"last dog\");\n        assert_eq!(watch(1200), \"first\");\n        assert_eq!(watch(1439), \"first\");\n    }\n\n    #[test]\n    fn clock_pads_with_zeros() {\n        assert_eq!(clock(0), \"00:00\");\n        assert_eq!(clock(245), \"04:05\");\n        assert_eq!(clock(1410), \"23:30\");\n    }\n\n    #[test]\n    fn log_line_singular_plural_and_none() {\n        assert_eq!(log_line(270), \"04:30 morning watch, 1 bell\");\n        assert_eq!(log_line(720), \"12:00 afternoon watch, 8 bells\");\n        assert_eq!(log_line(970), \"16:10 first dog watch, no bell\");\n    }\n}\n"
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "l0a-card-ternary",
+      "front": "How do you write C's `cond ? a : b` in Rust?",
+      "back": "Rust has **no** `?:` operator. `if` is an expression, so write `if cond { a } else { b }`, e.g. `let rank = if gold > 50 { \"captain\" } else { \"deckhand\" };`. Both branches must have the same type, and the `else` is required when you use the value.",
+      "unlockAfter": "l0a-predict-ternary"
+    },
+    {
+      "id": "l0a-card-match-expr",
+      "front": "What does `let mood = match n { 0 => \"none\", 1..=9 => \"few\", _ => \"many\" };` show about `match`?",
+      "back": "`match` is an **expression**: the chosen arm's value becomes `mood`. Patterns can be literals, `a | b`, ranges like `1..=9`, and `_` for everything else. A `match` must be exhaustive (otherwise E0004), and all arms must have the same type.",
+      "unlockAfter": "l0a-predict-ternary"
+    },
+    {
+      "id": "l0a-card-semicolon",
+      "front": "Why does `fn double(n: i32) -> i32 { n * 2; }` fail to compile?",
+      "back": "The `;` turns `n * 2` into a **statement**, so the block evaluates to `()`. The signature promises `i32`: error **E0308** (mismatched types). Remove the semicolon: the last expression *without* `;` is the return value.",
+      "unlockAfter": "l0a-predict-semicolon"
+    },
+    {
+      "id": "l0a-card-mut",
+      "front": "`let x = 5; x += 1;`: what does rustc say, and what are the two ways forward?",
+      "back": "**E0384**: cannot assign twice to an immutable variable. Either declare it `let mut x = 5;` (change it in place), or **shadow** it: `let x = x + 1;` (a new variable with the same name).",
+      "unlockAfter": "l0a-fix-rations"
+    },
+    {
+      "id": "l0a-card-int-div",
+      "front": "`cups: u32 = 50`, `crew: u32 = 4`. What are `cups / crew`, `cups % crew` and `cups as f64 / crew as f64`?",
+      "back": "`12` (integer division truncates), `2` (the remainder), and `12.5`. Rust never converts number types implicitly. Assigning a `u32` to an `f64` is E0308, so convert with `as` (or `f64::from`).",
+      "unlockAfter": "l0a-fix-rations"
+    },
+    {
+      "id": "l0a-card-loop-break",
+      "front": "How do you get a value out of a loop?",
+      "back": "With `loop` and `break value`: `let x = loop { …; if done { break n; } };`. Only `loop` can do this, because `while` and `for` may end without hitting a `break`.",
+      "unlockAfter": "l0a-predict-loop"
+    },
+    {
+      "id": "l0a-card-ranges",
+      "front": "What do `0..3`, `1..=3` and `(1..=3).rev()` produce in a `for` loop?",
+      "back": "`0, 1, 2` (the end is excluded), `1, 2, 3` (`..=` includes the end), and `3, 2, 1`.",
+      "unlockAfter": "l0a-predict-loop"
+    },
+    {
+      "id": "l0a-card-if-rules",
+      "front": "Name three rules for `if` used as a value.",
+      "back": "1. Both branches have the same type (otherwise E0308). 2. An `else` is required (otherwise E0317). 3. The condition must be a `bool`: Rust has no \"truthy\" numbers, so write `if n != 0`, not `if n`.",
+      "unlockAfter": "l0a-complete-helm"
+    },
+    {
+      "id": "l0a-card-overflow",
+      "front": "What happens at runtime with `let x: u32 = 0; let y = x - 1;` in a debug build, and how do you stop at zero instead?",
+      "back": "It **panics** with \"attempt to subtract with overflow\". Use `x.saturating_sub(1)`, which gives 0. In release builds overflow wraps silently, so don't rely on either behaviour by accident.",
+      "unlockAfter": "l0a-boss-bells"
+    }
+  ]
+}

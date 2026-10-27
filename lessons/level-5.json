@@ -1,6 +1,8 @@
 {
   "id": "errors",
-  "order": 5,
+  "order": 8,
+  "label": "5",
+  "section": "core",
   "title": "Option & Result: Error Handling",
   "summary": "No null, no exceptions. Model absence with Option, failure with Result, propagate with ?, and give your errors names with custom enums.",
   "quest": {

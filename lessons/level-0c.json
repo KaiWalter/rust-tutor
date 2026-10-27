@@ -1,0 +1,529 @@
+{
+  "id": "collections",
+  "order": 3,
+  "label": "0C",
+  "section": "prelude",
+  "title": "Collections & Loops: Tuples, Arrays, Vec",
+  "summary": "Tuples, arrays and Vec; indexing and its panic; looping over lists; Option from get/pop/max; closures with iter/map/filter/sum/collect; sort and join; &[T] parameters as a view of a list.",
+  "quest": {
+    "title": "The Quartermaster's Lists",
+    "story": "The quartermaster keeps everything in lists: crew names, barrel counts, the order of the night watches. Until now he kept them on scraps of sailcloth. Now he wants them in Rust, and you are the one who knows how.\n\nRust gives you three everyday ways to keep several values together. A **tuple** bundles a fixed handful of values of different types. An **array** holds a fixed number of values of one type. A **`Vec`** is a list that can grow and shrink. Add the loops and small *closures* that work on lists, and you can count, filter, sort and report on almost anything.\n\nThis is the last stop before Level 1. There you'll find out what really happens when a list or a `String` moves from one variable to another, and why you've been writing `&` in front of things."
+  },
+  "concepts": [
+    {
+      "title": "Tuples: a few values together",
+      "body": "A tuple groups a fixed number of values, which may have different types:\n\n```rust\nlet barrel: (&str, u32) = (\"rum\", 12);\nprintln!(\"{} x{}\", barrel.0, barrel.1);   // fields by position: .0, .1, …\nlet (name, count) = barrel;               // or unpack (destructure) it\n```\n\nTuples are the easy way to **return two values** from a function:\n\n```rust\nfn min_max(a: i32, b: i32) -> (i32, i32) {\n    if a < b { (a, b) } else { (b, a) }\n}\n\nlet (low, high) = min_max(9, 4);   // low = 4, high = 9\n```\n\n`()` is the empty tuple, the \"nothing\" a function returns when it has no `-> Type`."
+    },
+    {
+      "title": "Arrays and Vec",
+      "body": "An **array** `[T; N]` has a fixed length that is part of its type:\n\n```rust\nlet watches: [&str; 3] = [\"first\", \"middle\", \"morning\"];\nlet zeros = [0; 5];               // [0, 0, 0, 0, 0]\nprintln!(\"{}\", watches.len());    // 3\n```\n\nA **`Vec<T>`** is a growable list. You'll use it far more often:\n\n```rust\nlet mut crew: Vec<String> = Vec::new();\ncrew.push(String::from(\"Anne\"));\ncrew.push(\"Mary\".to_string());\nlet barrels = vec![3, 5, 8];        // vec! builds a Vec from values\nprintln!(\"{} {}\", crew.len(), barrels.is_empty());   // 2 false\nprintln!(\"{:?}\", barrels);          // [3, 5, 8]: {:?} prints a whole list\nlet last = crew.pop();              // Some(\"Mary\"): removes the last item\n```\n\nLike any variable, a `Vec` must be `let mut` before you can `push` or `pop`. Use `{:?}` (Debug) to print lists and tuples: plain `{}` doesn't work for them."
+    },
+    {
+      "title": "Indexing, get, and Option",
+      "body": "`v[i]` reads the item at position `i`, counting from 0. A position past the end **panics** at runtime:\n\n```rust\nlet barrels = vec![3, 5, 8];\nlet first = barrels[0];      // 3\nlet oops = barrels[3];       // panic: index out of bounds: the len is 3 but the index is 3\n```\n\nWhen the position might be missing, use `get`, which returns an **`Option`**: `Some(&item)` or `None`. Several list methods return an `Option` because the list might be empty: `get`, `first`, `last`, `pop`, `iter().max()`, `iter().min()`.\n\n```rust\nmatch barrels.get(5) {\n    Some(n) => println!(\"found {n}\"),\n    None => println!(\"no such barrel\"),\n}\nif let Some(n) = barrels.first() {\n    println!(\"first is {n}\");\n}\nlet biggest = barrels.iter().max().unwrap_or(&0);   // a fallback for empty lists\n```\n\nThe `&` in `Some(&item)` and `&0` means \"a look at the item still in the list\". Levels 1 and 2 explain it, and Level 5 covers `Option` in depth."
+    },
+    {
+      "title": "Looping over a list",
+      "body": "Three ways to loop, depending on what you need:\n\n```rust\nlet crew = vec![String::from(\"Anne\"), String::from(\"Mary\")];\n\nfor name in &crew {          // look at each item; crew is still usable afterwards\n    println!(\"{name}\");\n}\nfor (i, name) in crew.iter().enumerate() {   // with positions 0, 1, …\n    println!(\"{}. {name}\", i + 1);\n}\n\nlet mut barrels = vec![3, 5, 8];\nfor n in barrels.iter_mut() {   // change each item in place\n    *n += 1;                    // * means \"the item itself\"\n}\n\nfor name in crew {           // without &: the loop uses the list up\n    println!(\"{name}\");\n}\n// crew can't be used here any more. Level 1 explains why.\n```\n\nThe rule of thumb for now: **loop over `&list`** unless you're done with the list."
+    },
+    {
+      "title": "Lists as parameters: &[T]",
+      "body": "A function that only reads a list takes a **slice** `&[T]`, a view of a list. Call it with `&` in front of a `Vec` or an array:\n\n```rust\nfn total(barrels: &[u32]) -> u32 {\n    let mut sum = 0;\n    for n in barrels {\n        sum += n;\n    }\n    sum\n}\n\nlet v = vec![3, 5, 8];\nlet a = [1, 2];\ntotal(&v);      // 16\ntotal(&a);      // 3\n```\n\nIt's the same idea as `&str` for text: `&[u32]` is to `Vec<u32>` what `&str` is to `String`. Level 2 tells the full story.\n\nHandy read-only methods: `contains(&x)`, `len()`, `is_empty()`, `first()`, `last()`, `iter()`, and `join(\", \")` for lists of text."
+    },
+    {
+      "title": "Closures and iterator chains",
+      "body": "A **closure** is a small unnamed function written inline: `|x| x * 2` takes `x` and returns `x * 2`. Closures shine in **iterator chains**, which describe what to do with every item:\n\n```rust\nlet barrels = vec![3, 5, 8, 12];\n\nlet total: u32 = barrels.iter().sum();                        // 28\nlet doubled: Vec<u32> = barrels.iter().map(|n| n * 2).collect();  // [6, 10, 16, 24]\nlet big: Vec<&u32> = barrels.iter().filter(|n| **n > 4).collect(); // [5, 8, 12]\nlet how_many = barrels.iter().filter(|n| **n > 4).count();     // 3\nlet words: Vec<&str> = \"rum and gold\".split_whitespace().collect();\n```\n\n- `iter()` walks the items, `map` transforms each one, and `filter` keeps the ones where the closure says `true`.\n- `sum`, `count`, `max`, `min` and `collect` finish the chain. `collect` needs to know the type it builds, so write it on the `let` (`Vec<u32>`, `String`, …).\n- Inside `filter`, the closure gets a look at a look, hence `**n`. Writing `.copied()` after `iter()` gives you plain numbers instead: `barrels.iter().copied().filter(|n| *n > 4)`.\n\nA plain `for` loop is always fine too. Chains are just shorter once you're used to them."
+    },
+    {
+      "title": "Sorting and joining",
+      "body": "```rust\nlet mut crew = vec![\"Mary\", \"anne\", \"Jack\"];\ncrew.sort();                         // [\"Jack\", \"Mary\", \"anne\"]: byte order, capitals first\ncrew.sort_by_key(|n| n.to_lowercase());   // [\"anne\", \"Jack\", \"Mary\"]\ncrew.reverse();                      // [\"Mary\", \"Jack\", \"anne\"]\nprintln!(\"{}\", crew.join(\", \"));     // Mary, Jack, anne\n\nlet mut scores = vec![40, 7, 19];\nscores.sort();                       // [7, 19, 40]\nscores.sort_by(|a, b| b.cmp(a));     // [40, 19, 7]: descending\nscores.dedup();                      // removes neighbouring duplicates\n```\n\n`sort` changes the list itself, so the list must be `let mut`. To keep the original, sort a copy: `let mut sorted = scores.clone();`. (Level 1 says when copies are needed. Here it is, deliberately.)"
+    }
+  ],
+  "visual": {
+    "steps": [
+      {
+        "line": 2,
+        "note": "A tuple lives right on the stack: its two fields side by side.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "pair",
+                "name": "pair",
+                "value": "(\"rum\", 12)"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 3,
+        "note": "An array also lives on the stack. Its length (3) is fixed and part of its type.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "pair",
+                "name": "pair",
+                "value": "(\"rum\", 12)"
+              },
+              {
+                "id": "watches",
+                "name": "watches",
+                "value": "[4, 8, 12]"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 4,
+        "note": "vec! puts the items in a heap buffer. barrels holds a pointer, the length and the capacity.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "pair",
+                "name": "pair",
+                "value": "(\"rum\", 12)"
+              },
+              {
+                "id": "watches",
+                "name": "watches",
+                "value": "[4, 8, 12]"
+              },
+              {
+                "id": "barrels",
+                "name": "barrels",
+                "value": "ptr len 3 cap 3"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "[3, 5, 8]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "barrels",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 5,
+        "note": "push needs room for a 4th item. The buffer is full, so a bigger one (cap 6) is allocated and the items move over.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "pair",
+                "name": "pair",
+                "value": "(\"rum\", 12)"
+              },
+              {
+                "id": "watches",
+                "name": "watches",
+                "value": "[4, 8, 12]"
+              },
+              {
+                "id": "barrels",
+                "name": "barrels",
+                "value": "ptr len 4 cap 6"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "[3, 5, 8, 13]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "barrels",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 6,
+        "note": "for n in &barrels: each n is a look at one item inside the buffer, not a copy of the list.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "pair",
+                "name": "pair",
+                "value": "(\"rum\", 12)"
+              },
+              {
+                "id": "watches",
+                "name": "watches",
+                "value": "[4, 8, 12]"
+              },
+              {
+                "id": "barrels",
+                "name": "barrels",
+                "value": "ptr len 4 cap 6"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "&3"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "[3, 5, 8, 13]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "barrels",
+            "to": "h",
+            "kind": "own"
+          },
+          {
+            "from": "n",
+            "to": "h",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 9,
+        "note": "End of main: barrels frees its buffer. The tuple and the array just disappear with the stack frame.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "pair",
+                "name": "pair",
+                "value": "(\"rum\", 12)",
+                "state": "dropped"
+              },
+              {
+                "id": "watches",
+                "name": "watches",
+                "value": "[4, 8, 12]",
+                "state": "dropped"
+              },
+              {
+                "id": "barrels",
+                "name": "barrels",
+                "value": "ptr len 4 cap 6",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "[3, 5, 8, 13]",
+            "state": "freed"
+          }
+        ],
+        "arrows": []
+      }
+    ],
+    "title": "A Vec on the heap, a tuple and an array on the stack",
+    "code": "fn main() {\n    let pair = (\"rum\", 12);\n    let watches = [4, 8, 12];\n    let mut barrels = vec![3, 5, 8];\n    barrels.push(13);\n    for n in &barrels {\n        println!(\"{n} {}\", pair.1);\n    }\n}"
+  },
+  "challenges": [
+    {
+      "id": "l0c-predict-index",
+      "title": "The fourth barrel",
+      "kind": "predict",
+      "xp": 10,
+      "story": "Three barrels in the hold. The quartermaster asks for the fourth.",
+      "prompt": "What happens when you compile and run this program?",
+      "starter": "fn main() {\n    let barrels = vec![3, 5, 8];\n    let total = barrels[0] + barrels[1] + barrels[2];\n    println!(\"total {total}\");\n    let fourth = barrels[3];\n    println!(\"fourth {fourth}\");\n}\n",
+      "reference": "panics",
+      "hints": [
+        "Positions start at 0. Which positions exist in a list of length 3?",
+        "Positions 0, 1 and 2. The compiler doesn't track how long a `Vec` is, so `barrels[3]` is only noticed at runtime.",
+        "It prints `total 16`, then panics: \"index out of bounds: the len is 3 but the index is 3\". Use `barrels.get(3)` when a position may be missing."
+      ],
+      "choices": [
+        {
+          "id": "out-total-fourth-0",
+          "label": "It prints `total 16`, then `fourth 0`"
+        },
+        {
+          "id": "compile-error",
+          "label": "A compile error: index 3 is out of range"
+        },
+        {
+          "id": "panics",
+          "label": "It prints `total 16`, then panics"
+        },
+        {
+          "id": "out-total-fourth-8",
+          "label": "It prints `total 16`, then `fourth 8`"
+        }
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "panics",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l0c-predict-chain",
+      "title": "Doubled rations",
+      "kind": "predict",
+      "xp": 10,
+      "story": "Storm ahead. The cook doubles the rations, but only for the big barrels.",
+      "prompt": "What does this program print?",
+      "starter": "fn main() {\n    let barrels = vec![2, 7, 4, 10];\n    let big: Vec<i32> = barrels.iter().map(|n| n * 2).filter(|n| *n > 8).collect();\n    let total: i32 = big.iter().sum();\n    println!(\"{:?} {} {}\", big, total, barrels.len());\n}\n",
+      "reference": "out-14-8",
+      "hints": [
+        "Work through the chain one step at a time: first `map` (double everything), then `filter` (keep only the values over 8).",
+        "After `map`: `[4, 14, 8, 20]`. Which of those are greater than 8? And did any of this change `barrels`?",
+        "`[14, 20]`, sum `34`. `iter()` only looks at `barrels`, so it still has 4 items."
+      ],
+      "choices": [
+        {
+          "id": "out-14-8",
+          "label": "`[14, 20] 34 4`"
+        },
+        {
+          "id": "out-7-10",
+          "label": "`[7, 10] 17 4`"
+        },
+        {
+          "id": "out-8-14",
+          "label": "`[8, 14, 20] 42 4`"
+        },
+        {
+          "id": "out-14-2",
+          "label": "`[14, 20] 34 2`"
+        }
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-14-8",
+        "output": "[14, 20] 34 4\n"
+      }
+    },
+    {
+      "id": "l0c-fix-roster",
+      "title": "Fix the roster",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The quartermaster's roster program won't compile. *Rustc* has two complaints.",
+      "prompt": "Make the program compile and print exactly:\n\n```text\n3 aboard: Anne, Jack, Mary\n```\n\nRules:\n- Keep building the list with `Vec::new()` and `push`.\n- Keep the `println!` line as it is.",
+      "starter": "fn main() {\n    let crew = Vec::new();\n    crew.push(\"Mary\");\n    crew.push(\"Anne\");\n    crew.push(\"Jack\");\n    crew.sort();\n    let names = crew.join(\", \");\n    let count: u32 = crew.len();\n    println!(\"{count} aboard: {names}\");\n}\n",
+      "reference": "fn main() {\n    let mut crew = Vec::new();\n    crew.push(\"Mary\");\n    crew.push(\"Anne\");\n    crew.push(\"Jack\");\n    crew.sort();\n    let names = crew.join(\", \");\n    let count: usize = crew.len();\n    println!(\"{count} aboard: {names}\");\n}\n",
+      "hints": [
+        "Read *Rustc*'s first complaint: what must a variable be before `push` and `sort` can change it?",
+        "E0596: `crew` needs `let mut`. E0308: `len()` returns a `usize`, not a `u32`.",
+        "`let mut crew = Vec::new();` and `let count: usize = crew.len();` (or drop the `: u32` annotation)."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "prints the sorted roster",
+            "expected": "3 aboard: Anne, Jack, Mary\n"
+          }
+        ],
+        "require": [
+          {
+            "pattern": "Vec::new\\(\\)",
+            "message": "Keep building the list with Vec::new() and push."
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "vec!",
+            "message": "Keep building the list with Vec::new() and push, not vec!."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l0c-complete-stats",
+      "title": "Barrel statistics",
+      "kind": "complete",
+      "xp": 15,
+      "story": "The quartermaster wants three numbers about the barrel counts, all from one function.",
+      "prompt": "Implement `fn stats(barrels: &[i32]) -> (i32, i32, i32)`. It returns a tuple **(smallest, largest, total)**.\n\n- `stats(&[3, 9, 4])` → `(3, 9, 16)`\n- An empty list returns `(0, 0, 0)`.\n- Counts can be negative (barrels owed), e.g. `stats(&[-2, 5])` → `(-2, 5, 3)`.\n\nAlso implement `fn above(barrels: &[i32], limit: i32) -> Vec<i32>`: the counts strictly greater than `limit`, in their original order.\n\nHidden tests call both.",
+      "starter": "/// (smallest, largest, total), or (0, 0, 0) for an empty list.\nfn stats(barrels: &[i32]) -> (i32, i32, i32) {\n    todo!()\n}\n\n/// The counts strictly greater than limit, in order.\nfn above(barrels: &[i32], limit: i32) -> Vec<i32> {\n    todo!()\n}\n\nfn main() {\n    let barrels = vec![3, 9, 4];\n    let (low, high, total) = stats(&barrels);\n    println!(\"{low} {high} {total}\");\n    println!(\"{:?}\", above(&barrels, 3));\n}\n",
+      "reference": "/// (smallest, largest, total), or (0, 0, 0) for an empty list.\nfn stats(barrels: &[i32]) -> (i32, i32, i32) {\n    if barrels.is_empty() {\n        return (0, 0, 0);\n    }\n    let mut low = barrels[0];\n    let mut high = barrels[0];\n    let mut total = 0;\n    for &n in barrels {\n        low = low.min(n);\n        high = high.max(n);\n        total += n;\n    }\n    (low, high, total)\n}\n\n/// The counts strictly greater than limit, in order.\nfn above(barrels: &[i32], limit: i32) -> Vec<i32> {\n    barrels.iter().copied().filter(|n| *n > limit).collect()\n}\n\nfn main() {\n    let barrels = vec![3, 9, 4];\n    let (low, high, total) = stats(&barrels);\n    println!(\"{low} {high} {total}\");\n    println!(\"{:?}\", above(&barrels, 3));\n}\n",
+      "hints": [
+        "Handle the empty list first with an early `return (0, 0, 0);`. After that, `barrels[0]` is safe as a starting value for both smallest and largest.",
+        "Loop `for n in barrels` and update three `mut` variables. Each `n` is a look (`&i32`), so write `*n` to get the number, or loop `for &n in barrels`. `a.min(b)` and `a.max(b)` help. For `above`, use a loop with `push`, or `iter().copied().filter(…).collect()`.",
+        "`let mut low = barrels[0]; let mut high = barrels[0]; let mut total = 0; for &n in barrels { low = low.min(n); high = high.max(n); total += n; } (low, high, total)`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn stats_of_three() {\n        assert_eq!(stats(&[3, 9, 4]), (3, 9, 16));\n    }\n\n    #[test]\n    fn stats_of_empty() {\n        assert_eq!(stats(&[]), (0, 0, 0));\n    }\n\n    #[test]\n    fn stats_of_one() {\n        assert_eq!(stats(&[7]), (7, 7, 7));\n    }\n\n    #[test]\n    fn stats_with_negatives() {\n        assert_eq!(stats(&[-2, 5]), (-2, 5, 3));\n        assert_eq!(stats(&[-4, -9, -1]), (-9, -1, -14));\n    }\n\n    #[test]\n    fn stats_works_on_a_vec() {\n        let v = vec![10, 2, 30, 2];\n        assert_eq!(stats(&v), (2, 30, 44));\n    }\n\n    #[test]\n    fn above_keeps_order() {\n        assert_eq!(above(&[3, 9, 4, 1, 8], 3), vec![9, 4, 8]);\n    }\n\n    #[test]\n    fn above_is_strict() {\n        assert_eq!(above(&[3, 3, 4], 3), vec![4]);\n        assert_eq!(above(&[], 0), Vec::<i32>::new());\n        assert_eq!(above(&[1, 2], 5), Vec::<i32>::new());\n    }\n}\n"
+      }
+    },
+    {
+      "id": "l0c-complete-watch",
+      "title": "The watch bill",
+      "kind": "complete",
+      "xp": 15,
+      "story": "Every night the crew stands watch in pairs. The bosun writes the pairs down as tuples.",
+      "prompt": "A watch is a tuple `(&str, u32)`: a sailor's name and the hours they stood. Implement:\n\n- `fn hours_for(watches: &[(&str, u32)], name: &str) -> u32`: the total hours of everyone called `name` (an exact match). 0 if they're not on the list.\n- `fn busiest(watches: &[(&str, u32)]) -> Option<&str>`: the name of the **single watch** with the most hours. On a tie, the first one wins. `None` for an empty list.\n- `fn roster(watches: &[(&str, u32)]) -> String`: every distinct name, sorted alphabetically, joined with `\", \"`. `\"\"` for an empty list.\n\nHidden tests call all three.",
+      "starter": "/// Total hours stood by `name`.\nfn hours_for(watches: &[(&str, u32)], name: &str) -> u32 {\n    todo!()\n}\n\n/// The name on the longest single watch (first one on a tie).\nfn busiest<'a>(watches: &[(&'a str, u32)]) -> Option<&'a str> {\n    todo!()\n}\n\n/// Distinct names, sorted, joined with \", \".\nfn roster(watches: &[(&str, u32)]) -> String {\n    todo!()\n}\n\nfn main() {\n    let watches = vec![(\"Anne\", 4), (\"Jack\", 6), (\"Anne\", 2), (\"Mary\", 6)];\n    println!(\"{}\", hours_for(&watches, \"Anne\"));\n    println!(\"{:?}\", busiest(&watches));\n    println!(\"{}\", roster(&watches));\n}\n",
+      "reference": "/// Total hours stood by `name`.\nfn hours_for(watches: &[(&str, u32)], name: &str) -> u32 {\n    let mut total = 0;\n    for &(who, hours) in watches {\n        if who == name {\n            total += hours;\n        }\n    }\n    total\n}\n\n/// The name on the longest single watch (first one on a tie).\nfn busiest<'a>(watches: &[(&'a str, u32)]) -> Option<&'a str> {\n    let mut best: Option<(&'a str, u32)> = None;\n    for &(who, hours) in watches {\n        match best {\n            Some((_, most)) if most >= hours => {}\n            _ => best = Some((who, hours)),\n        }\n    }\n    match best {\n        Some((who, _)) => Some(who),\n        None => None,\n    }\n}\n\n/// Distinct names, sorted, joined with \", \".\nfn roster(watches: &[(&str, u32)]) -> String {\n    let mut names: Vec<&str> = Vec::new();\n    for &(who, _) in watches {\n        if !names.contains(&who) {\n            names.push(who);\n        }\n    }\n    names.sort();\n    names.join(\", \")\n}\n\nfn main() {\n    let watches = vec![(\"Anne\", 4), (\"Jack\", 6), (\"Anne\", 2), (\"Mary\", 6)];\n    println!(\"{}\", hours_for(&watches, \"Anne\"));\n    println!(\"{:?}\", busiest(&watches));\n    println!(\"{}\", roster(&watches));\n}\n",
+      "hints": [
+        "Loop over the list and unpack each tuple: `for (who, hours) in watches { … }`. Both are looks into the list, so use `*hours` for the number, or write the pattern as `for &(who, hours) in watches` to get plain copies. (The `'a` on `busiest` says the name you return comes from the list. Level 2 explains it, so leave it as it is.)",
+        "`busiest`: keep `let mut best_name: Option<&str> = None;` and `let mut best_hours = 0;`, and only replace them when `hours > best_hours`, or when nothing has been chosen yet. Strictly greater means the first one wins a tie. `roster`: collect the names in a `Vec<&str>`, skipping ones it already `contains(&who)`, then `sort()` and `join(\", \")`.",
+        "`for &(who, hours) in watches { if best_name.is_none() || hours > best_hours { best_name = Some(who); best_hours = hours; } } best_name`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    fn bill() -> Vec<(&'static str, u32)> {\n        vec![(\"Anne\", 4), (\"Jack\", 6), (\"Anne\", 2), (\"Mary\", 6)]\n    }\n\n    #[test]\n    fn hours_sum_per_name() {\n        assert_eq!(hours_for(&bill(), \"Anne\"), 6);\n        assert_eq!(hours_for(&bill(), \"Jack\"), 6);\n    }\n\n    #[test]\n    fn hours_for_unknown_is_zero() {\n        assert_eq!(hours_for(&bill(), \"anne\"), 0);\n        assert_eq!(hours_for(&[], \"Anne\"), 0);\n    }\n\n    #[test]\n    fn busiest_first_wins_a_tie() {\n        assert_eq!(busiest(&bill()), Some(\"Jack\"));\n    }\n\n    #[test]\n    fn busiest_single_and_zero_hours() {\n        assert_eq!(busiest(&[(\"Ned\", 0)]), Some(\"Ned\"));\n        assert_eq!(busiest(&[(\"Ned\", 0), (\"Bo\", 1)]), Some(\"Bo\"));\n    }\n\n    #[test]\n    fn busiest_of_empty_is_none() {\n        assert_eq!(busiest(&[]), None);\n    }\n\n    #[test]\n    fn roster_is_distinct_and_sorted() {\n        assert_eq!(roster(&bill()), \"Anne, Jack, Mary\");\n        assert_eq!(roster(&[(\"Zed\", 1), (\"Bo\", 2), (\"Zed\", 3)]), \"Bo, Zed\");\n    }\n\n    #[test]\n    fn roster_of_empty_is_empty() {\n        assert_eq!(roster(&[]), \"\");\n    }\n}\n"
+      }
+    },
+    {
+      "id": "l0c-write-top",
+      "title": "Top of the leaderboard",
+      "kind": "write",
+      "xp": 20,
+      "story": "The crew holds a knot-tying contest. The captain wants the podium, and a list of everyone who beat the average.",
+      "prompt": "Write two functions:\n\n- `fn top_three(scores: &[u32]) -> Vec<u32>`: the three highest scores, highest first. Duplicates count separately (`[5, 9, 9, 1]` → `[9, 9, 5]`). With fewer than three scores, return all of them, sorted highest first. Don't change the caller's list.\n- `fn above_average(scores: &[u32]) -> usize`: how many scores are **strictly** above the average. Compare exactly: `[1, 2]` has average 1.5, so one score (2) is above it. An empty list gives `0`.\n\nKeep a `fn main()`; it can print something or stay empty. Hidden tests call both. After they pass, the tutor judges whether your solution is idiomatic.",
+      "starter": "// Write top_three(scores: &[u32]) -> Vec<u32> and above_average(scores: &[u32]) -> usize here.\n\nfn main() {}\n",
+      "reference": "fn top_three(scores: &[u32]) -> Vec<u32> {\n    let mut sorted = scores.to_vec();\n    sorted.sort_by(|a, b| b.cmp(a));\n    sorted.truncate(3);\n    sorted\n}\n\nfn above_average(scores: &[u32]) -> usize {\n    if scores.is_empty() {\n        return 0;\n    }\n    let total: u64 = scores.iter().map(|&s| u64::from(s)).sum();\n    let n = scores.len() as u64;\n    // s > total / n, without rounding: s * n > total\n    scores.iter().filter(|&&s| u64::from(s) * n > total).count()\n}\n\nfn main() {\n    println!(\"{:?}\", top_three(&[5, 9, 9, 1]));\n    println!(\"{}\", above_average(&[1, 2]));\n}\n",
+      "hints": [
+        "`top_three`: you may not sort the caller's list, so make your own copy first: `let mut sorted = scores.to_vec();`. Then sort it highest first and keep the first three.",
+        "`sorted.sort_by(|a, b| b.cmp(a))` sorts in descending order (or `sort()` then `reverse()`). `sorted.truncate(3)` keeps at most three items. For the average, `total as f64 / len as f64` works. An integer-only trick: `s` is above the average exactly when `s * len > total`.",
+        "`scores.iter().filter(|&&s| s as f64 > avg).count()`. Or a `for` loop with a counter, which is just as good. Remember the empty list: return early before dividing by zero."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn top_three_highest_first() {\n        assert_eq!(top_three(&[4, 10, 7, 1, 8]), vec![10, 8, 7]);\n    }\n\n    #[test]\n    fn top_three_keeps_duplicates() {\n        assert_eq!(top_three(&[5, 9, 9, 1]), vec![9, 9, 5]);\n    }\n\n    #[test]\n    fn top_three_with_few_scores() {\n        assert_eq!(top_three(&[2, 6]), vec![6, 2]);\n        assert_eq!(top_three(&[]), Vec::<u32>::new());\n    }\n\n    #[test]\n    fn top_three_leaves_input_alone() {\n        let scores = vec![1, 3, 2];\n        let _ = top_three(&scores);\n        assert_eq!(scores, vec![1, 3, 2]);\n    }\n\n    #[test]\n    fn above_average_is_strict_and_exact() {\n        assert_eq!(above_average(&[1, 2]), 1);\n        assert_eq!(above_average(&[4, 4, 4]), 0);\n        assert_eq!(above_average(&[1, 2, 3, 10]), 1);\n        assert_eq!(above_average(&[2, 3, 3]), 2);\n    }\n\n    #[test]\n    fn above_average_of_empty() {\n        assert_eq!(above_average(&[]), 0);\n    }\n\n    #[test]\n    fn above_average_large_scores() {\n        assert_eq!(above_average(&[u32::MAX, u32::MAX, 0]), 2);\n    }\n}\n"
+      },
+      "judge": "agent",
+      "rubric": "Idiomatic beginner collection handling: parameters are `&[u32]` slices and the caller's list is not modified (an owned copy via `to_vec()`/`clone()` is made only for sorting, which is fine and expected). `top_three` sorts descending (`sort_by(|a, b| b.cmp(a))`, `sort` + `reverse`, or `sort_unstable_by`) and then `truncate(3)`, `take(3).collect()` or similar. Manual index juggling that duplicates sort logic is weaker. `above_average` handles the empty list before dividing, and avoids integer division that rounds the average down (using f64 or the `s * n > total` trick). Overflow-safe summation (u64) is a plus but not required. Iterator chains or plain `for` loops with counters are equally acceptable; reward clarity. Deduct for `unwrap()` on values that can be empty, for indexing past the end, or for needless clones inside loops."
+    },
+    {
+      "id": "l0c-boss-muster",
+      "title": "Boss: Muster on deck",
+      "kind": "boss",
+      "xp": 40,
+      "story": "All hands on deck! The quartermaster reads out the muster: names and ages, one sailor per line, some lines blotted by sea spray. The captain wants the summary before the anchor is up.",
+      "prompt": "The program reads **all of stdin**. Each line should be `name age`: a name with no spaces, whitespace, then an age that fits in `u32`. Lines are trimmed first, and empty lines are skipped. Any other non-empty line (wrong number of words, or an age that doesn't parse) counts as **blotted**.\n\nPrint exactly these lines:\n\n1. `crew: N` (the number of valid sailors)\n2. `blotted: B`\n3. `oldest: NAME (AGE)`, the first sailor with the highest age, or `oldest: none` if there are no sailors\n4. `average age: A`, the average with exactly one decimal (`{:.1}`), or `average age: none`\n5. `roster: NAMES`, the names sorted alphabetically (byte order, as `sort()` does), joined with `\", \"`, or `roster: none`\n\nFor this input:\n\n```text\nAnne 31\nJack 42\nMary 29\nBo   42\nsmudge\nNed old\n\nZed 17\n```\n\nthe output is exactly:\n\n```text\ncrew: 5\nblotted: 2\noldest: Jack (42)\naverage age: 32.2\nroster: Anne, Bo, Jack, Mary, Zed\n```\n\nThe hidden cases include empty input, a muster with only blotted lines, and padded lines. Use the **stdin** box next to Run to try your own input.",
+      "starter": "use std::io::{self, Read};\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    // Build a Vec of (name, age) tuples, count the blotted lines,\n    // then print the five summary lines.\n}\n",
+      "reference": "use std::io::{self, Read};\n\n/// \"name age\" -> Some((name, age)); anything else -> None.\nfn parse_sailor(line: &str) -> Option<(&str, u32)> {\n    let words: Vec<&str> = line.split_whitespace().collect();\n    if words.len() != 2 {\n        return None;\n    }\n    match words[1].parse() {\n        Ok(age) => Some((words[0], age)),\n        Err(_) => None,\n    }\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n\n    let mut crew: Vec<(&str, u32)> = Vec::new();\n    let mut blotted = 0;\n    for line in text.lines() {\n        let line = line.trim();\n        if line.is_empty() {\n            continue;\n        }\n        match parse_sailor(line) {\n            Some(sailor) => crew.push(sailor),\n            None => blotted += 1,\n        }\n    }\n\n    println!(\"crew: {}\", crew.len());\n    println!(\"blotted: {blotted}\");\n\n    let mut oldest: Option<(&str, u32)> = None;\n    for &(name, age) in &crew {\n        match oldest {\n            Some((_, best)) if best >= age => {}\n            _ => oldest = Some((name, age)),\n        }\n    }\n    match oldest {\n        Some((name, age)) => println!(\"oldest: {name} ({age})\"),\n        None => println!(\"oldest: none\"),\n    }\n\n    if crew.is_empty() {\n        println!(\"average age: none\");\n        println!(\"roster: none\");\n    } else {\n        let total: u64 = crew.iter().map(|&(_, age)| u64::from(age)).sum();\n        let average = total as f64 / crew.len() as f64;\n        println!(\"average age: {average:.1}\");\n        let mut names: Vec<&str> = crew.iter().map(|&(name, _)| name).collect();\n        names.sort();\n        println!(\"roster: {}\", names.join(\", \"));\n    }\n}\n",
+      "hints": [
+        "First turn the text into data: a `Vec<(&str, u32)>` of sailors plus a `blotted` counter. Then compute the five lines from that `Vec`. A helper `fn parse_sailor(line: &str) -> Option<(&str, u32)>` keeps `main` short.",
+        "To parse a line: `let words: Vec<&str> = line.split_whitespace().collect();`. It's valid if `words.len() == 2` and `words[1].parse::<u32>()` is `Ok(age)`. Use `match` or `if let Ok(age) = …` on the parse.",
+        "Oldest: keep `Option<(&str, u32)>` and replace it only when the new age is **strictly** greater (the first one wins a tie). Average: `total as f64 / crew.len() as f64`, printed with `{:.1}`. Watch the empty crew: check `crew.is_empty()` before dividing.",
+        "Roster: `let mut names: Vec<&str> = crew.iter().map(|&(name, _)| name).collect(); names.sort(); names.join(\", \")`. If the closure pattern feels odd, a `for` loop that pushes `name` works just as well."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "the muster",
+            "stdin": "Anne 31\nJack 42\nMary 29\nBo   42\nsmudge\nNed old\n\nZed 17\n",
+            "expected": "crew: 5\nblotted: 2\noldest: Jack (42)\naverage age: 32.2\nroster: Anne, Bo, Jack, Mary, Zed\n"
+          },
+          {
+            "name": "empty muster",
+            "stdin": "",
+            "expected": "crew: 0\nblotted: 0\noldest: none\naverage age: none\nroster: none\n"
+          },
+          {
+            "name": "only blotted lines",
+            "stdin": "the cook\n42\nNed -3\n",
+            "expected": "crew: 0\nblotted: 3\noldest: none\naverage age: none\nroster: none\n"
+          },
+          {
+            "name": "padded lines and byte order",
+            "stdin": "   zoe 20\n\tAnne 21\nBo 22 extra\nbo 25\n",
+            "expected": "crew: 3\nblotted: 1\noldest: bo (25)\naverage age: 22.0\nroster: Anne, bo, zoe\n"
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "l0c-card-tuple",
+      "front": "How do you read the fields of `let barrel = (\"rum\", 12);`, and how do you return two values from a function?",
+      "back": "By position, `barrel.0` and `barrel.1`, or by unpacking: `let (name, count) = barrel;`. Return a tuple: `fn min_max(…) -> (i32, i32) { (low, high) }`.",
+      "unlockAfter": "l0c-predict-index"
+    },
+    {
+      "id": "l0c-card-array-vec",
+      "front": "Array `[T; N]` vs `Vec<T>`?",
+      "back": "An array has a fixed length that is part of its type, e.g. `[i32; 3]`, and lives on the stack. A `Vec` can grow and shrink (`push`, `pop`), and its items live on the heap. `vec![1, 2, 3]` builds a `Vec`.",
+      "unlockAfter": "l0c-predict-index"
+    },
+    {
+      "id": "l0c-card-index",
+      "front": "What does `v[3]` do on a 3-item `Vec`, and what's the safe alternative?",
+      "back": "It **panics** at runtime: index out of bounds (positions are 0, 1, 2). `v.get(3)` returns `None` instead; it returns `Some(&item)` when the position exists.",
+      "unlockAfter": "l0c-predict-index"
+    },
+    {
+      "id": "l0c-card-option",
+      "front": "Which list methods return an `Option`, and three ways to handle one?",
+      "back": "`get`, `first`, `last`, `pop`, `iter().max()`, `iter().min()`, because the list may be empty or too short. Handle it with `match x { Some(v) => …, None => … }`, with `if let Some(v) = x { … }`, or with `x.unwrap_or(default)`.",
+      "unlockAfter": "l0c-predict-index"
+    },
+    {
+      "id": "l0c-card-chain",
+      "front": "What do `map`, `filter`, `sum`, `count` and `collect` do in `v.iter().map(…).filter(…)…`?",
+      "back": "`map(|x| …)` transforms each item, and `filter(|x| …)` keeps the items where the closure returns `true`. `sum`, `count` and `collect` finish the chain: add up, count, or build a new collection. `collect` needs the target type, e.g. `let v: Vec<u32> = …`.",
+      "unlockAfter": "l0c-predict-chain"
+    },
+    {
+      "id": "l0c-card-closure",
+      "front": "What is `|n| n * 2`?",
+      "back": "A **closure**: a small unnamed function written inline. Parameters go between the bars, and the body follows. Used with `map`, `filter`, `sort_by` and more. `|a, b| b.cmp(a)` takes two parameters.",
+      "unlockAfter": "l0c-predict-chain"
+    },
+    {
+      "id": "l0c-card-mut-vec",
+      "front": "Why does `let crew = Vec::new(); crew.push(\"Anne\");` fail?",
+      "back": "E0596: `push` changes the list, and `crew` isn't `mut`. Write `let mut crew = Vec::new();`. Also note that `len()` returns a `usize`, not a `u32`.",
+      "unlockAfter": "l0c-fix-roster"
+    },
+    {
+      "id": "l0c-card-for-ref",
+      "front": "`for x in &v` vs `for x in v` vs `for x in v.iter_mut()`?",
+      "back": "`&v` looks at each item, and `v` stays usable. Plain `v` uses the list up, so it can't be used afterwards (Level 1 explains why). `iter_mut()` lets you change each item through `*x`.",
+      "unlockAfter": "l0c-complete-stats"
+    },
+    {
+      "id": "l0c-card-slice-param",
+      "front": "What parameter type should a function that only reads a list of `i32` take, and how do you call it?",
+      "back": "`&[i32]`, a slice (a view of a list). Call it with `f(&my_vec)` or `f(&my_array)`. It's the list counterpart of `&str` for text.",
+      "unlockAfter": "l0c-complete-stats"
+    },
+    {
+      "id": "l0c-card-sort-join",
+      "front": "Sort a `Vec` descending, keep the first three, and join text with commas?",
+      "back": "`v.sort_by(|a, b| b.cmp(a));` (or `sort()` then `reverse()`), then `v.truncate(3);`. For text lists, `names.join(\", \")`. Sorting changes the list, so it must be `mut`. Sort a `to_vec()` copy to keep the original.",
+      "unlockAfter": "l0c-write-top"
+    }
+  ]
+}
