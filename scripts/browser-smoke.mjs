@@ -96,7 +96,10 @@ expect("memory visualizer rendered", (await page.locator("#visual-host svg").cou
 const step1 = await page.textContent(".visual-note");
 await page.click('[data-v="next"]');
 const step2 = await page.textContent(".visual-note");
-expect("visualizer steps forward", step1 !== step2 && (await page.locator("#visual-host svg .arrow").count()) >= 1, `"${step2.slice(0, 50)}"`);
+// Arrows drawn must match the lesson's step 2 (stack-only visuals, like 0A's, have none).
+const wantArrows = level.visual.steps[1]?.arrows.length ?? 0;
+const arrows = await page.locator("#visual-host svg .arrow").count();
+expect("visualizer steps forward", step1 !== step2 && arrows === wantArrows, `"${step2.slice(0, 50)}", ${arrows}/${wantArrows} arrow(s)`);
 await shot("02-first-challenge");
 await page.locator(".visual").screenshot({ path: path.join(SHOTS, "02b-visual.png") });
 

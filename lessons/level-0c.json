@@ -102,7 +102,7 @@
               {
                 "id": "barrels",
                 "name": "barrels",
-                "value": "ptr len 3 cap 3"
+                "value": "len3 cap3"
               }
             ]
           }
@@ -141,7 +141,7 @@
               {
                 "id": "barrels",
                 "name": "barrels",
-                "value": "ptr len 4 cap 6"
+                "value": "len4 cap6"
               }
             ]
           }
@@ -180,7 +180,7 @@
               {
                 "id": "barrels",
                 "name": "barrels",
-                "value": "ptr len 4 cap 6"
+                "value": "len4 cap6"
               },
               {
                 "id": "n",
@@ -231,7 +231,7 @@
               {
                 "id": "barrels",
                 "name": "barrels",
-                "value": "ptr len 4 cap 6",
+                "value": "len4 cap6",
                 "state": "dropped"
               }
             ]

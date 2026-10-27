@@ -51,7 +51,7 @@
               {
                 "id": "greeting",
                 "name": "greeting",
-                "value": "&str len 4"
+                "value": "&str 4"
               }
             ]
           }
@@ -69,12 +69,12 @@
               {
                 "id": "greeting",
                 "name": "greeting",
-                "value": "&str len 4"
+                "value": "&str 4"
               },
               {
                 "id": "log",
                 "name": "log",
-                "value": "ptr len 3 cap 3"
+                "value": "len3 cap3"
               }
             ]
           }
@@ -103,12 +103,12 @@
               {
                 "id": "greeting",
                 "name": "greeting",
-                "value": "&str len 4"
+                "value": "&str 4"
               },
               {
                 "id": "log",
                 "name": "log",
-                "value": "ptr len 9 cap 9"
+                "value": "len9 cap9"
               }
             ]
           }
@@ -137,17 +137,17 @@
               {
                 "id": "greeting",
                 "name": "greeting",
-                "value": "&str len 4"
+                "value": "&str 4"
               },
               {
                 "id": "log",
                 "name": "log",
-                "value": "ptr len 9 cap 9"
+                "value": "len9 cap9"
               },
               {
                 "id": "first",
                 "name": "first",
-                "value": "&str len 3"
+                "value": "&str 3"
               }
             ]
           }
@@ -181,22 +181,22 @@
               {
                 "id": "greeting",
                 "name": "greeting",
-                "value": "&str len 4"
+                "value": "&str 4"
               },
               {
                 "id": "log",
                 "name": "log",
-                "value": "ptr len 9 cap 9"
+                "value": "len9 cap9"
               },
               {
                 "id": "first",
                 "name": "first",
-                "value": "&str len 3"
+                "value": "&str 3"
               },
               {
                 "id": "loud",
                 "name": "loud",
-                "value": "ptr len 9 cap 9"
+                "value": "len9 cap9"
               }
             ]
           }
@@ -239,25 +239,25 @@
               {
                 "id": "greeting",
                 "name": "greeting",
-                "value": "&str len 4",
+                "value": "&str 4",
                 "state": "dropped"
               },
               {
                 "id": "log",
                 "name": "log",
-                "value": "ptr len 9 cap 9",
+                "value": "len9 cap9",
                 "state": "dropped"
               },
               {
                 "id": "first",
                 "name": "first",
-                "value": "&str len 3",
+                "value": "&str 3",
                 "state": "dropped"
               },
               {
                 "id": "loud",
                 "name": "loud",
-                "value": "ptr len 9 cap 9",
+                "value": "len9 cap9",
                 "state": "dropped"
               }
             ]
