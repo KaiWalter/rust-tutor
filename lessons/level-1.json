@@ -1,0 +1,562 @@
+{
+  "id": "ownership",
+  "order": 1,
+  "title": "Ownership & Moves",
+  "summary": "Every value has exactly one owner. Learn what moves, what copies, and how functions take and give back ownership.",
+  "quest": {
+    "title": "The Ledger of the Crab Fleet",
+    "story": "The Crab Fleet keeps one ledger, and there is only ever **one** copy of it. Whoever holds the ledger is responsible for it. When they leave port, the ledger goes with them, and anyone who tries to read it afterwards finds empty hands.\n\nYou are the new quartermaster. The old one left behind a pile of half-working Rust programs that track cargo, crew and treasure. The compiler, an old parrot named *Rustc*, keeps squawking about \"moved values\".\n\nLearn the rules of ownership, fix the programs, and win back the ledger to earn your place on the crew.\n"
+  },
+  "concepts": [
+    {
+      "title": "One owner per value",
+      "body": "Every value in Rust has exactly **one owner**: a variable, a struct field, a vector slot. When the owner goes out of scope, the value is **dropped** and its memory is freed. You never call `free`, and there is no garbage collector.\n\n```rust\n{\n    let cargo = String::from(\"rum\"); // cargo owns a heap buffer\n    // ... use cargo ...\n} // cargo goes out of scope: the buffer is freed here\n```\n"
+    },
+    {
+      "title": "Assignment moves",
+      "body": "For types that manage a resource, like `String`, `Vec<T>` or `Box<T>`, assignment **moves** ownership. Nothing is deep-copied. The old variable becomes unusable:\n\n```rust\nlet a = String::from(\"gold\");\nlet b = a;            // ownership moves to b\nprintln!(\"{a}\");      // error[E0382]: borrow of moved value: `a`\n```\n\nThis is how Rust guarantees the buffer is freed exactly once: only `b` will drop it.\n"
+    },
+    {
+      "title": "Copy types are duplicated",
+      "body": "Small plain values like integers, floats, `bool`, `char` and tuples of those implement `Copy`. Assigning them copies the bits, and both variables stay usable:\n\n```rust\nlet x = 7;\nlet y = x;     // copy\nprintln!(\"{x} {y}\"); // fine: 7 7\n```\n\nRule of thumb: if it owns heap memory, it moves. If it's a plain number, it copies.\n"
+    },
+    {
+      "title": "Functions take ownership",
+      "body": "Passing a value to a function moves it into the parameter, exactly like an assignment. Returning a value moves it back out:\n\n```rust\nfn stamp(mut s: String) -> String {\n    s.push_str(\" [stamped]\");\n    s // ownership goes back to the caller\n}\n\nlet doc = String::from(\"manifest\");\nlet doc = stamp(doc); // give it away, get it back\n```\n\nGiving ownership away and taking it back works, but it gets clumsy. That's what borrowing is for.\n"
+    },
+    {
+      "title": "clone() is explicit and costs something",
+      "body": "If you really need two independent copies, call `.clone()`. It allocates and copies the whole buffer. Rust makes this visible on purpose. Reaching for `.clone()` just to silence the compiler is a code smell, so many challenges here forbid it.\n"
+    },
+    {
+      "title": "Lending with & (preview)",
+      "body": "Often a function only needs to *look* at a value. Then lend it with a reference (`&`) instead of moving it:\n\n```rust\nfn shout(s: &str) -> usize { s.len() }\n\nlet cargo = String::from(\"rum\");\nshout(&cargo);          // lend\nprintln!(\"{cargo}\");    // still ours\n```\n\n`&String` coerces to `&str` automatically. Level 2 covers borrowing in depth.\n"
+    }
+  ],
+  "visual": {
+    "title": "Moves, copies and drops",
+    "code": "fn main() {\n    let a = String::from(\"gold\");\n    let b = a;\n    let x = 7;\n    let y = x;\n    take(b);\n}\nfn take(s: String) {}",
+    "steps": [
+      {
+        "line": 2,
+        "note": "a owns a heap buffer holding \"gold\" (pointer, length 4, capacity 4).",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "a",
+                "name": "a",
+                "value": "ptr len=4"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"gold\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "a",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 3,
+        "note": "let b = a moves ownership: the pointer is copied into b and a becomes unusable. The heap data is not copied.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "a",
+                "name": "a",
+                "state": "moved"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "value": "ptr len=4"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"gold\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "b",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 4,
+        "note": "x is a plain i32. It lives entirely on the stack.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "a",
+                "name": "a",
+                "state": "moved"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "value": "ptr len=4"
+              },
+              {
+                "id": "x",
+                "name": "x",
+                "value": "7"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"gold\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "b",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 5,
+        "note": "i32 is Copy: y gets its own 7 and x stays usable.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "a",
+                "name": "a",
+                "state": "moved"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "value": "ptr len=4"
+              },
+              {
+                "id": "x",
+                "name": "x",
+                "value": "7"
+              },
+              {
+                "id": "y",
+                "name": "y",
+                "value": "7"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"gold\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "b",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 6,
+        "note": "take(b) moves the String into the parameter s. b is now moved-from too.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "a",
+                "name": "a",
+                "state": "moved"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "state": "moved"
+              },
+              {
+                "id": "x",
+                "name": "x",
+                "value": "7"
+              },
+              {
+                "id": "y",
+                "name": "y",
+                "value": "7"
+              }
+            ]
+          },
+          {
+            "frame": "take",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "value": "ptr len=4"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"gold\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "s",
+            "to": "h",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 8,
+        "note": "take returns without giving s back, so s is dropped and the buffer is freed. It is freed exactly once, because only one owner existed.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "a",
+                "name": "a",
+                "state": "moved"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "state": "moved"
+              },
+              {
+                "id": "x",
+                "name": "x",
+                "value": "7"
+              },
+              {
+                "id": "y",
+                "name": "y",
+                "value": "7"
+              }
+            ]
+          },
+          {
+            "frame": "take",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "\"gold\"",
+            "state": "freed"
+          }
+        ],
+        "arrows": []
+      },
+      {
+        "line": 7,
+        "note": "End of main: x and y are popped. a and b were moved-from, so there is nothing left to free.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "a",
+                "name": "a",
+                "state": "dropped"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "state": "dropped"
+              },
+              {
+                "id": "x",
+                "name": "x",
+                "state": "dropped"
+              },
+              {
+                "id": "y",
+                "name": "y",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      }
+    ]
+  },
+  "challenges": [
+    {
+      "id": "l1-predict-move",
+      "title": "Two names, one ledger",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The old quartermaster scribbled this on the back of a map. *Rustc* the parrot is already ruffling its feathers.",
+      "prompt": "Read the program. What happens when you compile and run it?",
+      "starter": "fn main() {\n    let ledger = String::from(\"ahoy\");\n    let backup = ledger;\n    println!(\"{ledger} and {backup}\");\n}\n",
+      "reference": "E0382",
+      "choices": [
+        {
+          "id": "prints-both",
+          "label": "It prints `ahoy and ahoy`"
+        },
+        {
+          "id": "E0382",
+          "label": "Compile error E0382: borrow of moved value `ledger`"
+        },
+        {
+          "id": "panics",
+          "label": "It compiles but panics at runtime: `ledger` is empty"
+        },
+        {
+          "id": "E0384",
+          "label": "Compile error E0384: cannot assign twice to an immutable variable"
+        }
+      ],
+      "hints": [
+        "What kind of type is `String`: does it own heap memory?",
+        "`let backup = ledger;` is an assignment of a `String`. Is that a copy or a move?",
+        "After a move the old name may not be used at all, and rustc checks that at compile time, not at runtime."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "E0382",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l1-fix-shout",
+      "title": "Shouting at the cargo",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The lookout wants to shout the cargo name across the deck and still keep it in the log.",
+      "prompt": "This program does not compile. Make it compile and print exactly:\n\n```text\nRUM!\nshouted 3 letters of rum\n```\n\nRules: no `.clone()`. `shout` must still print the uppercased name and return its length. Change *how* it receives the cargo, not what it does.\n",
+      "starter": "fn shout(s: String) -> usize {\n    println!(\"{}!\", s.to_uppercase());\n    s.len()\n}\n\nfn main() {\n    let cargo = String::from(\"rum\");\n    let n = shout(cargo);\n    println!(\"shouted {n} letters of {cargo}\");\n}\n",
+      "reference": "fn shout(s: &str) -> usize {\n    println!(\"{}!\", s.to_uppercase());\n    s.len()\n}\n\nfn main() {\n    let cargo = String::from(\"rum\");\n    let n = shout(&cargo);\n    println!(\"shouted {n} letters of {cargo}\");\n}\n",
+      "hints": [
+        "Read the error: where is `cargo` moved, and where is it used afterwards?",
+        "`shout` only needs to *look* at the text. It doesn't need to own it.",
+        "Change the parameter to `s: &str` and call it as `shout(&cargo)`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "shouts and keeps the cargo",
+            "expected": "RUM!\nshouted 3 letters of rum\n"
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): lend the String instead of duplicating it."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l1-predict-copy",
+      "title": "Counting doubloons",
+      "kind": "predict",
+      "xp": 10,
+      "story": "A cabin boy claims this function steals gold from the chest.",
+      "prompt": "What does this program print?",
+      "starter": "fn bump(mut n: i32) -> i32 {\n    n += 1;\n    n\n}\n\nfn main() {\n    let gold = 10;\n    let more = bump(gold);\n    println!(\"{gold} {more}\");\n}\n",
+      "reference": "out-10-11",
+      "choices": [
+        {
+          "id": "out-10-11",
+          "label": "`10 11`"
+        },
+        {
+          "id": "out-11-11",
+          "label": "`11 11`"
+        },
+        {
+          "id": "E0382",
+          "label": "Compile error E0382: `gold` was moved into `bump`"
+        },
+        {
+          "id": "out-10-10",
+          "label": "`10 10`"
+        }
+      ],
+      "hints": [
+        "Is `i32` a type that owns heap memory?",
+        "`i32` is `Copy`: passing it to a function copies the number.",
+        "`bump` changes its own copy `n`. `gold` in main is untouched."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-10-11",
+        "output": "10 11\n"
+      }
+    },
+    {
+      "id": "l1-complete-ledger",
+      "title": "Give the ledger back",
+      "kind": "complete",
+      "xp": 15,
+      "story": "Each officer takes the ledger, writes a line, and must hand it back. Nobody gets a copy.",
+      "prompt": "Implement both functions. They take **ownership** of the log and must hand it back:\n\n- `append_entry(log: String, entry: &str) -> String`: append `entry` on a new line and return the log. If the log is empty, the result is just `entry` (no leading newline).\n- `count_lines(log: String) -> (String, usize)`: return the log unchanged, together with its number of lines. An empty log has 0 lines.\n\nHidden tests call both functions directly.\n",
+      "starter": "/// Appends `entry` on a new line and gives the log back.\nfn append_entry(log: String, entry: &str) -> String {\n    todo!()\n}\n\n/// Gives the log back together with its number of lines.\nfn count_lines(log: String) -> (String, usize) {\n    todo!()\n}\n\nfn main() {\n    let log = String::from(\"day 1: set sail\");\n    let log = append_entry(log, \"day 2: storm\");\n    let (log, lines) = count_lines(log);\n    println!(\"{lines} lines:\\n{log}\");\n}\n",
+      "reference": "/// Appends `entry` on a new line and gives the log back.\nfn append_entry(mut log: String, entry: &str) -> String {\n    if !log.is_empty() {\n        log.push('\\n');\n    }\n    log.push_str(entry);\n    log\n}\n\n/// Gives the log back together with its number of lines.\nfn count_lines(log: String) -> (String, usize) {\n    let lines = log.lines().count();\n    (log, lines)\n}\n\nfn main() {\n    let log = String::from(\"day 1: set sail\");\n    let log = append_entry(log, \"day 2: storm\");\n    let (log, lines) = count_lines(log);\n    println!(\"{lines} lines:\\n{log}\");\n}\n",
+      "hints": [
+        "To modify a parameter you own, declare it `mut log: String`.",
+        "`String` has `push(char)`, `push_str(&str)` and `is_empty()`. `str::lines()` iterates lines.",
+        "Compute the count *before* you move `log` into the returned tuple: `let n = log.lines().count(); (log, n)`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn append_to_existing_log_adds_a_line() {\n        assert_eq!(append_entry(String::from(\"a\"), \"b\"), \"a\\nb\");\n    }\n\n    #[test]\n    fn append_to_empty_log_has_no_leading_newline() {\n        assert_eq!(append_entry(String::new(), \"first\"), \"first\");\n    }\n\n    #[test]\n    fn appends_chain() {\n        let log = append_entry(append_entry(String::new(), \"x\"), \"y\");\n        assert_eq!(append_entry(log, \"z\"), \"x\\ny\\nz\");\n    }\n\n    #[test]\n    fn count_lines_returns_log_unchanged() {\n        let (log, n) = count_lines(String::from(\"one\\ntwo\\nthree\"));\n        assert_eq!(log, \"one\\ntwo\\nthree\");\n        assert_eq!(n, 3);\n    }\n\n    #[test]\n    fn empty_log_has_zero_lines() {\n        assert_eq!(count_lines(String::new()), (String::new(), 0));\n    }\n}\n"
+      }
+    },
+    {
+      "id": "l1-write-manifest",
+      "title": "Write the crew manifest",
+      "kind": "write",
+      "xp": 20,
+      "story": "The harbour master wants a numbered crew list. The crew's name tags go into the manifest and do not come back.",
+      "prompt": "Write `fn manifest(names: Vec<String>) -> String`. It **consumes** the vector and returns one numbered line per name, joined with `\\n` and with no trailing newline:\n\n```text\n1. Ann\n2. Bo\n3. Cy\n```\n\nAn empty vector gives `(empty)`. Keep a `fn main()`; it can call `manifest` or stay empty.\n\nAfter the tests pass, the tutor judges whether your solution is idiomatic. Don't clone names you already own.\n",
+      "starter": "// Write manifest(names: Vec<String>) -> String here.\n\nfn main() {}\n",
+      "reference": "fn manifest(names: Vec<String>) -> String {\n    if names.is_empty() {\n        return String::from(\"(empty)\");\n    }\n    let mut out = String::new();\n    for (i, name) in names.into_iter().enumerate() {\n        if i > 0 {\n            out.push('\\n');\n        }\n        out.push_str(&format!(\"{}. {}\", i + 1, name));\n    }\n    out\n}\n\nfn main() {\n    let crew = vec![String::from(\"Ann\"), String::from(\"Bo\")];\n    println!(\"{}\", manifest(crew));\n}\n",
+      "hints": [
+        "Iterate the vector by value (`for name in names`) to take each `String` out of it.",
+        "`.enumerate()` gives you the index. Remember humans count from 1.",
+        "Handle the empty case first, then build the result with `push_str`/`format!`, or collect lines into a `Vec<String>` and `.join(\"\\n\")`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    fn v(names: &[&str]) -> Vec<String> {\n        names.iter().map(|s| s.to_string()).collect()\n    }\n\n    #[test]\n    fn numbers_each_name_from_one() {\n        assert_eq!(manifest(v(&[\"Ann\", \"Bo\", \"Cy\"])), \"1. Ann\\n2. Bo\\n3. Cy\");\n    }\n\n    #[test]\n    fn single_name_has_no_newline() {\n        assert_eq!(manifest(v(&[\"Solo\"])), \"1. Solo\");\n    }\n\n    #[test]\n    fn empty_crew_is_marked_empty() {\n        assert_eq!(manifest(Vec::new()), \"(empty)\");\n    }\n\n    #[test]\n    fn ten_names_count_to_ten() {\n        let names: Vec<String> = (1..=10).map(|i| format!(\"n{i}\")).collect();\n        let out = manifest(names);\n        assert!(out.ends_with(\"10. n10\"), \"{out}\");\n        assert_eq!(out.lines().count(), 10);\n    }\n}\n"
+      },
+      "judge": "agent",
+      "rubric": "Idiomatic ownership: the function takes Vec<String> by value and moves each String out (for name in names / into_iter), with no .clone() or .to_string() on names it already owns. The empty case is handled clearly. Output is built with push_str, format!/write!, or collecting into Vec<String> and join(\"\\n\"); any of these is fine. Deduct points for unnecessary allocations, cloning, index-based loops with names[i].clone(), or a trailing-newline hack such as trimming at the end. Readability matters more than cleverness.\n"
+    },
+    {
+      "id": "l1-boss-ledger",
+      "title": "Boss: The Treasure Ledger",
+      "kind": "boss",
+      "xp": 40,
+      "story": "The captain hands you the ledger program and walks away. It doesn't even compile. Fix it before the fleet sails and the ledger is yours.",
+      "prompt": "The program reads the whole ledger from stdin and prints a report. It has **ownership bugs**, and it crashes on an empty ledger. Fix it so that, for the input\n\n```text\ngold\nrum\n\nmaps\n```\n\nit prints exactly:\n\n```text\n3 entries, first: gold\nraw bytes: 15\n- gold\n- rum\n- maps\nlongest: gold\n```\n\nRules:\n- Blank lines are skipped, and entries are trimmed.\n- `longest` is the first entry with the most bytes.\n- An empty ledger prints `0 entries`, then `raw bytes: N`, then `longest: none`, with no `- ` lines.\n- No `.clone()` anywhere. Fix it by lending, not by copying.\n\nHidden cases include an empty ledger and an entry with surrounding spaces.\n",
+      "starter": "use std::io::{self, Read};\n\n// One entry per non-empty, trimmed line.\nfn entries(text: String) -> Vec<String> {\n    let mut out = Vec::new();\n    for line in text.lines() {\n        if !line.trim().is_empty() {\n            out.push(line.trim().to_string());\n        }\n    }\n    out\n}\n\nfn report(items: Vec<String>) -> String {\n    format!(\"{} entries, first: {}\", items.len(), items[0])\n}\n\n// The first entry with the most bytes, or \"none\".\nfn longest(items: Vec<String>) -> String {\n    let mut best = String::from(\"none\");\n    let mut best_len = 0;\n    for item in items {\n        if item.len() > best_len {\n            best_len = item.len();\n            best = item;\n        }\n    }\n    best\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    let items = entries(text);\n    println!(\"{}\", report(items));\n    println!(\"raw bytes: {}\", text.len());\n    for item in items {\n        println!(\"- {item}\");\n    }\n    println!(\"longest: {}\", longest(items));\n}\n",
+      "reference": "use std::io::{self, Read};\n\n// One entry per non-empty, trimmed line.\nfn entries(text: &str) -> Vec<String> {\n    let mut out = Vec::new();\n    for line in text.lines() {\n        if !line.trim().is_empty() {\n            out.push(line.trim().to_string());\n        }\n    }\n    out\n}\n\nfn report(items: &[String]) -> String {\n    if items.is_empty() {\n        return String::from(\"0 entries\");\n    }\n    format!(\"{} entries, first: {}\", items.len(), items[0])\n}\n\n// The first entry with the most bytes, or \"none\".\nfn longest(items: &[String]) -> &str {\n    let mut best = \"none\";\n    let mut best_len = 0;\n    for item in items {\n        if item.len() > best_len {\n            best_len = item.len();\n            best = item.as_str();\n        }\n    }\n    best\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    let items = entries(&text);\n    println!(\"{}\", report(&items));\n    println!(\"raw bytes: {}\", text.len());\n    for item in &items {\n        println!(\"- {item}\");\n    }\n    println!(\"longest: {}\", longest(&items));\n}\n",
+      "hints": [
+        "There are three separate moves that break later uses: `text`, then `items` (twice). Fix them one error at a time.",
+        "Functions that only read their input can borrow it: `&str` instead of `String`, and `&[String]` (or `&Vec<String>`) instead of `Vec<String>`.",
+        "`for item in items` consumes the vector. `for item in &items` only borrows it. `items[0]` panics on an empty vector, so check `is_empty()` first.",
+        "`longest` can return `&str`: start with `let mut best = \"none\";` and assign `best = item.as_str();`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "three entries with a blank line",
+            "stdin": "gold\nrum\n\nmaps\n",
+            "expected": "3 entries, first: gold\nraw bytes: 15\n- gold\n- rum\n- maps\nlongest: gold\n"
+          },
+          {
+            "name": "padded single entry",
+            "stdin": "  doubloons  \n",
+            "expected": "1 entries, first: doubloons\nraw bytes: 14\n- doubloons\nlongest: doubloons\n"
+          },
+          {
+            "name": "empty ledger",
+            "stdin": "",
+            "expected": "0 entries\nraw bytes: 0\nlongest: none\n"
+          },
+          {
+            "name": "tie keeps the first",
+            "stdin": "ab\ncd\nx\n",
+            "expected": "3 entries, first: ab\nraw bytes: 8\n- ab\n- cd\n- x\nlongest: ab\n"
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): fix the moves by lending (&) instead of copying."
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "l1-card-owner",
+      "front": "When is a `String`'s heap buffer freed?",
+      "back": "When its **owner** goes out of scope and the value is dropped. There is exactly one owner, so it is freed exactly once. No GC, no manual `free`."
+    },
+    {
+      "id": "l1-card-move",
+      "front": "`let b = a;` with `a: String`. What can you still do with `a`?",
+      "back": "Nothing. Ownership **moved** to `b`, and using `a` is error **E0382** (borrow of moved value). Only the pointer, length and capacity were copied, not the heap data.",
+      "unlockAfter": "l1-predict-move"
+    },
+    {
+      "id": "l1-card-copy",
+      "front": "Why does `let y = x;` leave `x: i32` usable?",
+      "back": "`i32` implements `Copy`: assignment duplicates the bits. Integers, floats, `bool`, `char` and tuples or arrays of `Copy` types are `Copy`. Types that own heap memory are not.",
+      "unlockAfter": "l1-predict-copy"
+    },
+    {
+      "id": "l1-card-fn-move",
+      "front": "What happens to a `String` you pass to `fn f(s: String)`?",
+      "back": "It is **moved** into the parameter `s`. Unless `f` returns it, it is dropped when `f` returns, and the caller can't use it anymore.",
+      "unlockAfter": "l1-fix-shout"
+    },
+    {
+      "id": "l1-card-give-back",
+      "front": "How can a function modify an owned `String` and let the caller keep it, without references?",
+      "back": "Take it by value and **return** it: `fn f(mut s: String) -> String { s.push('!'); s }` and call `let s = f(s);`.",
+      "unlockAfter": "l1-complete-ledger"
+    },
+    {
+      "id": "l1-card-lend",
+      "front": "A function only reads some text. Which parameter type should it take?",
+      "back": "`&str`. It borrows instead of taking ownership, and accepts both `&String` (via deref coercion) and string literals.",
+      "unlockAfter": "l1-fix-shout"
+    },
+    {
+      "id": "l1-card-for-move",
+      "front": "`for x in v` vs `for x in &v` for `v: Vec<String>`?",
+      "back": "`for x in v` **consumes** the vector, and each `x` is an owned `String`. `for x in &v` borrows it, each `x` is a `&String`, and `v` is still usable afterwards.",
+      "unlockAfter": "l1-boss-ledger"
+    }
+  ]
+}

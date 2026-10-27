@@ -104,6 +104,8 @@ function validateCheck(c, ch, where) {
     if (!ids.includes(c.answer)) fail(`${where}.answer`, "must be one of the choice ids");
     // compiles | E0382-style code: verified against real rustc by scripts/check-lessons.mjs
     if (c.compilerAgrees !== undefined && typeof c.compilerAgrees !== "boolean") fail(`${where}.compilerAgrees`, "must be boolean");
+    // exact stdout of the starter program, for "what does this print?" predictions
+    if (c.output !== undefined && typeof c.output !== "string") fail(`${where}.output`, "must be a string");
   }
   if (c.forbid !== undefined) {
     arr(c.forbid, `${where}.forbid`, { max: 10 });

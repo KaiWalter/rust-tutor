@@ -1,0 +1,656 @@
+{
+  "id": "borrowing",
+  "order": 2,
+  "title": "Borrowing & Lifetimes",
+  "summary": "Lend values without giving them away. Learn shared and mutable references, why you can't alias and mutate at once, slices, and how lifetimes stop references from dangling.",
+  "quest": {
+    "title": "Lending the Ledger",
+    "story": "You won the ledger. Now every officer on the Crab Fleet wants to look at it: the navigator to read the route, the cook to count the rum, the captain to scribble new plunder into it.\n\nHanding the ledger over for good is out of the question. You learned that the hard way. Instead you **lend** it. The ship's articles about lending are strict:\n\n- Any number of officers may **read** the ledger at the same time.\n- Only **one** officer may **write** in it, and while they write, nobody else may even look.\n- Whoever borrows the ledger must give it back before it leaves port. A note that says \"the ledger is in the captain's cabin\" is worthless once the cabin is gone.\n\n*Rustc* the parrot enforces these articles at compile time, and it squawks in a new dialect now: E0502, E0499, E0106, E0515.\n\nLearn to lend the ledger without losing it, and the quartermaster's quill is yours.\n"
+  },
+  "concepts": [
+    {
+      "title": "Shared references: &T",
+      "body": "A reference **borrows** a value without taking ownership. `&x` creates a shared reference: you can read through it, and the owner keeps the value.\n\n```rust\nfn count(ledger: &Vec<String>) -> usize {\n    ledger.len()\n}\n\nlet ledger = vec![String::from(\"gold\")];\nlet n = count(&ledger); // lend it\nprintln!(\"{n} {ledger:?}\"); // still ours\n```\n\nYou can have as many shared references at once as you like. A `&T` is `Copy`: handing out a borrow never moves anything. While a shared borrow is alive, the owner can't change the value. The value is **frozen**.\n"
+    },
+    {
+      "title": "Mutable references: &mut T",
+      "body": "`&mut x` lends the value with permission to change it. The variable itself must be declared `mut`.\n\n```rust\nfn stamp(entry: &mut String) {\n    entry.push_str(\" [checked]\");\n}\n\nlet mut entry = String::from(\"rum\");\nstamp(&mut entry);\nprintln!(\"{entry}\"); // rum [checked]\n```\n\nThrough a `&mut` you can read, write, and call `&mut self` methods like `push`. You use `*r` to assign through it when the type is a plain value: `*count += 1;`.\n"
+    },
+    {
+      "title": "Aliasing XOR mutation",
+      "body": "The core rule: at any moment a value has **either** any number of `&` borrows **or** exactly one `&mut` borrow, never both.\n\n```rust\nlet mut ledger = vec![1, 2];\nlet first = &ledger[0];\nledger.push(3);       // error[E0502]: cannot borrow as mutable\nprintln!(\"{first}\");  // because it is also borrowed as immutable\n```\n\nWhy so strict? `push` may reallocate the buffer, and then `first` would point at freed memory. Two `&mut` at once are rejected too (**E0499**), because two writers could invalidate each other's view.\n\nThe usual fixes: finish reading before you write, copy out the small value you need (`let first = ledger[0];` for an `i32`), or compute first and mutate afterwards.\n"
+    },
+    {
+      "title": "Borrows end at their last use",
+      "body": "A borrow lasts until the reference is **used for the last time**, not until the end of the block. This is called *non-lexical lifetimes* (NLL).\n\n```rust\nlet mut gold = 10;\nlet peek = &gold;\nprintln!(\"{peek}\");    // last use of peek: the shared borrow ends here\nlet grab = &mut gold;  // fine\n*grab += 5;\n```\n\nSo reordering code often fixes E0502 or E0499: do all the reading, then all the writing.\n"
+    },
+    {
+      "title": "Slices: &str and &[T]",
+      "body": "A **slice** is a borrowed view of part of a sequence: a pointer plus a length.\n\n- `&str` views text. String literals are `&str`, and `&String` coerces to it.\n- `&[T]` views elements. `&Vec<T>` and arrays coerce to it.\n- `&mut [T]` lets you change the elements in place, but not add or remove them.\n\n```rust\nlet line = String::from(\"gold: 30\");\nlet name: &str = &line[..4];        // \"gold\"\nlet shares = vec![5, 10, 20];\nlet tail: &[i32] = &shares[1..];    // [10, 20]\n```\n\nPrefer `&str` and `&[T]` parameters over `&String` and `&Vec<T>`. They accept more callers and say exactly what you need.\n"
+    },
+    {
+      "title": "Lifetimes: references can't outlive their owner",
+      "body": "A reference must never outlive the value it points to. Returning a reference to a local is rejected (**E0515**), because the local is dropped when the function returns:\n\n```rust\nfn title(name: &str) -> &str {\n    let t = format!(\"Captain {name}\");\n    &t // error[E0515]: return the owned String instead\n}\n```\n\nWhen a function returns a reference and takes several, rustc can't guess which input it borrows from (**E0106**). You name it with a **lifetime parameter**:\n\n```rust\nfn longest<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if b.len() > a.len() { b } else { a }\n}\n```\n\nRead `'a` as \"the result lives no longer than both inputs\". Annotations don't change how long anything lives. They describe the relationship so the compiler can check every caller. Tie the result only to the inputs it can actually come from.\n"
+    }
+  ],
+  "visual": {
+    "title": "Lending the ledger",
+    "code": "fn main() {\n    let mut ledger = vec![10, 20];\n    let peek = &ledger;\n    println!(\"{}\", peek[0]);\n    let pen = &mut ledger;\n    pen.push(30);\n    println!(\"{}\", ledger.len());\n}",
+    "steps": [
+      {
+        "line": 2,
+        "note": "ledger owns a heap buffer holding two numbers.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "ledger",
+                "name": "ledger",
+                "value": "ptr len=2 cap=2"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "[10, 20]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "ledger",
+            "to": "h1",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 3,
+        "note": "peek borrows ledger. While a shared borrow is alive, ledger is frozen: nobody may change it.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "ledger",
+                "name": "ledger",
+                "value": "ptr len=2 cap=2",
+                "state": "frozen"
+              },
+              {
+                "id": "peek",
+                "name": "peek",
+                "value": "&ledger"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "[10, 20]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "ledger",
+            "to": "h1",
+            "kind": "own"
+          },
+          {
+            "from": "peek",
+            "to": "ledger",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 4,
+        "note": "Reading through peek is fine. This is peek's last use, so the shared borrow ends right here.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "ledger",
+                "name": "ledger",
+                "value": "ptr len=2 cap=2",
+                "state": "frozen"
+              },
+              {
+                "id": "peek",
+                "name": "peek",
+                "value": "&ledger"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "[10, 20]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "ledger",
+            "to": "h1",
+            "kind": "own"
+          },
+          {
+            "from": "peek",
+            "to": "ledger",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 5,
+        "note": "peek is no longer used, so a &mut borrow is allowed. pen has exclusive access: ledger can't even be read directly now.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "ledger",
+                "name": "ledger",
+                "value": "ptr len=2 cap=2",
+                "state": "frozen"
+              },
+              {
+                "id": "peek",
+                "name": "peek",
+                "state": "dropped"
+              },
+              {
+                "id": "pen",
+                "name": "pen",
+                "value": "&mut ledger"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "[10, 20]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "ledger",
+            "to": "h1",
+            "kind": "own"
+          },
+          {
+            "from": "pen",
+            "to": "ledger",
+            "kind": "mut"
+          }
+        ]
+      },
+      {
+        "line": 6,
+        "note": "push needs more room, so the Vec moves its elements to a bigger buffer and frees the old one. A live peek would now point at freed memory. That's why E0502 exists.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "ledger",
+                "name": "ledger",
+                "value": "ptr len=3 cap=4",
+                "state": "frozen"
+              },
+              {
+                "id": "peek",
+                "name": "peek",
+                "state": "dropped"
+              },
+              {
+                "id": "pen",
+                "name": "pen",
+                "value": "&mut ledger"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "[10, 20]",
+            "state": "freed"
+          },
+          {
+            "id": "h2",
+            "label": "[10, 20, 30, _]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "ledger",
+            "to": "h2",
+            "kind": "own"
+          },
+          {
+            "from": "pen",
+            "to": "ledger",
+            "kind": "mut"
+          }
+        ]
+      },
+      {
+        "line": 7,
+        "note": "pen's last use was the push, so the &mut borrow has ended. ledger is no longer frozen and can be read again: it prints 3.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "ledger",
+                "name": "ledger",
+                "value": "ptr len=3 cap=4"
+              },
+              {
+                "id": "peek",
+                "name": "peek",
+                "state": "dropped"
+              },
+              {
+                "id": "pen",
+                "name": "pen",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h2",
+            "label": "[10, 20, 30, _]"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "ledger",
+            "to": "h2",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 8,
+        "note": "End of main: ledger is dropped and frees its buffer. The references owned nothing, so they free nothing.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "ledger",
+                "name": "ledger",
+                "state": "dropped"
+              },
+              {
+                "id": "peek",
+                "name": "peek",
+                "state": "dropped"
+              },
+              {
+                "id": "pen",
+                "name": "pen",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h2",
+            "label": "[10, 20, 30, _]",
+            "state": "freed"
+          }
+        ],
+        "arrows": []
+      }
+    ]
+  },
+  "challenges": [
+    {
+      "id": "l2-predict-aliasing",
+      "title": "Reading while writing",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The navigator holds a finger on the first line of the ledger while the captain adds a new one.",
+      "prompt": "Read the program. What happens when you compile and run it?",
+      "starter": "fn main() {\n    let mut ledger = vec![String::from(\"gold\"), String::from(\"rum\")];\n    let first = &ledger[0];\n    ledger.push(String::from(\"maps\"));\n    println!(\"first entry: {first}\");\n}\n",
+      "reference": "E0502",
+      "choices": [
+        {
+          "id": "prints",
+          "label": "It prints `first entry: gold`"
+        },
+        {
+          "id": "E0502",
+          "label": "Compile error E0502: cannot borrow `ledger` as mutable because it is also borrowed as immutable"
+        },
+        {
+          "id": "E0499",
+          "label": "Compile error E0499: cannot borrow `ledger` as mutable more than once at a time"
+        },
+        {
+          "id": "E0382",
+          "label": "Compile error E0382: `ledger[0]` was moved into `first`"
+        },
+        {
+          "id": "panics",
+          "label": "It compiles, but panics at runtime because `first` points at freed memory"
+        }
+      ],
+      "hints": [
+        "`first` is a reference into the vector. When is it used for the last time?",
+        "`push` takes `&mut self`. Is there another borrow of `ledger` alive at that moment, and of which kind?",
+        "A shared borrow (`first`) is still alive when `push` asks for a mutable one. Rust rejects that at compile time, so it never gets the chance to dangle at runtime."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "E0502",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l2-predict-nll",
+      "title": "Peek, then grab",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The cook peeks at the rum count, then the bosun grabs the ledger to add five barrels.",
+      "prompt": "What does this program print?",
+      "starter": "fn main() {\n    let mut rum = 10;\n    let peek = &rum;\n    println!(\"peek {peek}\");\n    let grab = &mut rum;\n    *grab += 5;\n    println!(\"rum {rum}\");\n}\n",
+      "reference": "out-10-15",
+      "choices": [
+        {
+          "id": "out-10-15",
+          "label": "`peek 10` then `rum 15`"
+        },
+        {
+          "id": "out-10-10",
+          "label": "`peek 10` then `rum 10`: `grab` changed a copy"
+        },
+        {
+          "id": "E0502",
+          "label": "Compile error E0502: `rum` is borrowed by `peek` until the end of `main`"
+        },
+        {
+          "id": "E0499",
+          "label": "Compile error E0499: `rum` is borrowed mutably twice"
+        }
+      ],
+      "hints": [
+        "How long does the borrow in `peek` last: to the end of the block, or to its last use?",
+        "`peek` is never used after the first `println!`. Is anything still borrowing `rum` when `grab` is created?",
+        "Borrows end at their last use, so `&mut rum` is allowed. `*grab += 5` changes `rum` itself, not a copy."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-10-15",
+        "output": "peek 10\nrum 15\n"
+      }
+    },
+    {
+      "id": "l2-fix-quills",
+      "title": "Too many quills",
+      "kind": "fix",
+      "xp": 15,
+      "story": "Two officers grabbed the ledger at once, and a third is still pointing at a line. *Rustc* refuses to let the ship sail.",
+      "prompt": "This program does not compile. Make it compile and print exactly:\n\n```text\nfirst: gold\n[\"gold\", \"rum (checked)\", \"maps\", \"silk\"]\n```\n\nRules:\n- Keep the borrows `last` and `first` and use them as they are used now. Fix it by **reordering** statements so the borrows don't overlap.\n- No `.clone()`, `.to_string()` or `.to_owned()`.\n",
+      "starter": "fn main() {\n    let mut ledger = vec![String::from(\"gold\"), String::from(\"rum\")];\n    let last = ledger.last_mut().unwrap();\n    ledger.push(String::from(\"maps\"));\n    last.push_str(\" (checked)\");\n    let first = &ledger[0];\n    ledger.push(String::from(\"silk\"));\n    println!(\"first: {first}\");\n    println!(\"{ledger:?}\");\n}\n",
+      "reference": "fn main() {\n    let mut ledger = vec![String::from(\"gold\"), String::from(\"rum\")];\n    let last = ledger.last_mut().unwrap();\n    last.push_str(\" (checked)\");\n    ledger.push(String::from(\"maps\"));\n    let first = &ledger[0];\n    println!(\"first: {first}\");\n    ledger.push(String::from(\"silk\"));\n    println!(\"{ledger:?}\");\n}\n",
+      "hints": [
+        "There are two errors. Read each one: which borrow is still alive when `ledger` is borrowed again?",
+        "`last` is a `&mut` borrow that lives until `last.push_str(...)`. `first` is a `&` borrow that lives until it is printed. Neither may overlap a `push`.",
+        "Move `last.push_str(\" (checked)\");` above the first `push`, and move `println!(\"first: {first}\");` above the second `push`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "checks rum and keeps every entry",
+            "expected": "first: gold\n[\"gold\", \"rum (checked)\", \"maps\", \"silk\"]\n"
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): lend the value with & or &mut instead of copying it."
+          },
+          {
+            "pattern": "\\.to_string\\(\\)",
+            "message": "No .to_string(): copying the text dodges the borrow instead of fixing it."
+          },
+          {
+            "pattern": "\\.to_owned\\(\\)",
+            "message": "No .to_owned(): copying the text dodges the borrow instead of fixing it."
+          },
+          {
+            "pattern": "String::from\\(\\s*&?\\s*ledger",
+            "message": "Don't copy entries out of the ledger: reorder the borrows instead."
+          }
+        ],
+        "require": [
+          {
+            "pattern": "last_mut\\(\\)",
+            "message": "Keep the `last` borrow from `ledger.last_mut()`."
+          },
+          {
+            "pattern": "&ledger\\[0\\]",
+            "message": "Keep the `first` borrow `&ledger[0]`."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l2-fix-dangling",
+      "title": "Notes that point nowhere",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The old quartermaster wrote two helper functions. One forgot to say where its answer comes from. The other hands out a note to a cabin that sinks the moment the function returns.",
+      "prompt": "Neither function compiles. Fix both:\n\n- `longest(a: &str, b: &str) -> &str` returns whichever input has more bytes, and `a` on a tie. It must keep returning a **borrowed** `&str` that points into one of its inputs. Add the lifetime annotation it needs.\n- `title(name: &str)` returns `\"Captain \"` followed by the name. It builds a new string, so it can't return a reference to it. Change the return type so it hands the new string over.\n\nHidden tests call both functions directly. One of them keeps the result of `longest` after the call, as a `&str`.\n",
+      "starter": "fn longest(a: &str, b: &str) -> &str {\n    if b.len() > a.len() {\n        b\n    } else {\n        a\n    }\n}\n\nfn title(name: &str) -> &str {\n    let t = format!(\"Captain {name}\");\n    &t\n}\n\nfn main() {\n    let route = String::from(\"Tortuga\");\n    println!(\"{}\", longest(&route, \"Port Royal\"));\n    println!(\"{}\", title(\"Ferris\"));\n}\n",
+      "reference": "fn longest<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if b.len() > a.len() {\n        b\n    } else {\n        a\n    }\n}\n\nfn title(name: &str) -> String {\n    format!(\"Captain {name}\")\n}\n\nfn main() {\n    let route = String::from(\"Tortuga\");\n    println!(\"{}\", longest(&route, \"Port Royal\"));\n    println!(\"{}\", title(\"Ferris\"));\n}\n",
+      "hints": [
+        "Read the error codes. E0106 is about `longest`, and E0515 (which shows up once E0106 is gone) is about `title`.",
+        "`longest` returns one of its inputs, but rustc can't tell which. Name one lifetime and use it on both inputs and on the result. `title` creates `t` inside the function, and `t` is dropped when the function returns.",
+        "`fn longest<'a>(a: &'a str, b: &'a str) -> &'a str`, and `fn title(name: &str) -> String { format!(\"Captain {name}\") }`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn longest_picks_the_longer_input() {\n        assert_eq!(longest(\"rum\", \"Tortuga\"), \"Tortuga\");\n        assert_eq!(longest(\"Port Royal\", \"Nassau\"), \"Port Royal\");\n    }\n\n    #[test]\n    fn longest_keeps_a_on_a_tie() {\n        let a = String::from(\"abc\");\n        let b = String::from(\"xyz\");\n        let r: &str = longest(&a, &b);\n        assert!(std::ptr::eq(r.as_ptr(), a.as_ptr()));\n    }\n\n    #[test]\n    fn longest_returns_a_borrow_into_its_input() {\n        let a = String::from(\"short\");\n        let b = String::from(\"a long voyage\");\n        let r: &str = longest(&a, &b);\n        assert!(std::ptr::eq(r.as_ptr(), b.as_ptr()));\n        assert_eq!(r, \"a long voyage\");\n    }\n\n    #[test]\n    fn title_prefixes_captain() {\n        let t: String = title(\"Ferris\");\n        assert_eq!(t, \"Captain Ferris\");\n    }\n}\n",
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): lend the value with & or &mut instead of copying it."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l2-complete-slices",
+      "title": "Slicing the manifest",
+      "kind": "complete",
+      "xp": 15,
+      "story": "The purser needs three small tools that look at parts of the manifest without copying any of it.",
+      "prompt": "Implement the three functions. None of them allocates. They return views into their input or change it in place:\n\n- `first_word(line: &str) -> &str`: the text before the first space, or the whole line if there is no space. `\"gold 30\"` gives `\"gold\"`, `\"\"` gives `\"\"`.\n- `last_n(entries: &[u32], n: usize) -> &[u32]`: the last `n` elements, or all of them if there are fewer than `n`.\n- `add_bonus(shares: &mut [u32], bonus: u32)`: add `bonus` to every element, in place.\n\nHidden tests call all three directly and check that the returned slices point into the input.\n",
+      "starter": "/// The text before the first space, or the whole line.\nfn first_word(line: &str) -> &str {\n    todo!()\n}\n\n/// The last `n` entries, or all of them if there are fewer.\nfn last_n(entries: &[u32], n: usize) -> &[u32] {\n    todo!()\n}\n\n/// Adds `bonus` to every share, in place.\nfn add_bonus(shares: &mut [u32], bonus: u32) {\n    todo!()\n}\n\nfn main() {\n    let line = String::from(\"gold 30\");\n    println!(\"{}\", first_word(&line));\n    let mut shares = vec![5, 10, 20, 40];\n    add_bonus(&mut shares[1..], 1);\n    println!(\"{:?}\", last_n(&shares, 2));\n}\n",
+      "reference": "/// The text before the first space, or the whole line.\nfn first_word(line: &str) -> &str {\n    match line.find(' ') {\n        Some(i) => &line[..i],\n        None => line,\n    }\n}\n\n/// The last `n` entries, or all of them if there are fewer.\nfn last_n(entries: &[u32], n: usize) -> &[u32] {\n    let start = entries.len().saturating_sub(n);\n    &entries[start..]\n}\n\n/// Adds `bonus` to every share, in place.\nfn add_bonus(shares: &mut [u32], bonus: u32) {\n    for s in shares.iter_mut() {\n        *s += bonus;\n    }\n}\n\nfn main() {\n    let line = String::from(\"gold 30\");\n    println!(\"{}\", first_word(&line));\n    let mut shares = vec![5, 10, 20, 40];\n    add_bonus(&mut shares[1..], 1);\n    println!(\"{:?}\", last_n(&shares, 2));\n}\n",
+      "hints": [
+        "Slicing syntax: `&s[..i]` is everything before index `i`, and `&v[start..]` is everything from `start` to the end.",
+        "`str::find(' ')` returns `Option<usize>`. For `last_n`, compute the start index carefully: `len - n` underflows when `n > len`, but `len.saturating_sub(n)` doesn't. To change elements, loop with `for s in shares.iter_mut()` and write `*s += bonus`.",
+        "`match line.find(' ') { Some(i) => &line[..i], None => line }`, `&entries[entries.len().saturating_sub(n)..]`, and `for s in shares.iter_mut() { *s += bonus; }`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn first_word_stops_at_the_first_space() {\n        assert_eq!(first_word(\"gold 30 bars\"), \"gold\");\n    }\n\n    #[test]\n    fn first_word_without_space_is_the_whole_line() {\n        assert_eq!(first_word(\"rum\"), \"rum\");\n        assert_eq!(first_word(\"\"), \"\");\n    }\n\n    #[test]\n    fn first_word_points_into_the_line() {\n        let line = String::from(\"maps 2\");\n        let w = first_word(&line);\n        assert!(std::ptr::eq(w.as_ptr(), line.as_ptr()));\n    }\n\n    #[test]\n    fn last_n_takes_the_tail() {\n        let v = [1, 2, 3, 4, 5];\n        let t = last_n(&v, 2);\n        assert_eq!(t, &[4, 5]);\n        assert!(std::ptr::eq(t.as_ptr(), v[3..].as_ptr()));\n    }\n\n    #[test]\n    fn last_n_larger_than_len_gives_everything() {\n        assert_eq!(last_n(&[7, 8], 5), &[7, 8]);\n    }\n\n    #[test]\n    fn last_n_zero_is_empty() {\n        assert!(last_n(&[1, 2, 3], 0).is_empty());\n    }\n\n    #[test]\n    fn add_bonus_changes_only_the_lent_part() {\n        let mut v = vec![5, 10, 20, 40];\n        add_bonus(&mut v[1..3], 3);\n        assert_eq!(v, vec![5, 13, 23, 40]);\n    }\n\n    #[test]\n    fn add_bonus_on_empty_slice_is_fine() {\n        let mut v: Vec<u32> = Vec::new();\n        add_bonus(&mut v, 9);\n        assert!(v.is_empty());\n    }\n}\n",
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): lend the value with & or &mut instead of copying it."
+          },
+          {
+            "pattern": "\\.to_vec\\(\\)",
+            "message": "No .to_vec(): return a view into the input, not a copy."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l2-write-find-entry",
+      "title": "Find the entry",
+      "kind": "write",
+      "xp": 20,
+      "story": "The captain shouts a prefix across the deck, \"rum!\", and wants a finger on the matching ledger line. The shout fades at once, but the finger must stay on the ledger.",
+      "prompt": "Write `find_entry`. It takes a ledger `&[String]` and a prefix `&str`, and returns `Option<&str>`: the **first** entry that starts with the prefix, borrowed from the ledger, or `None`.\n\n```rust\nlet ledger = vec![String::from(\"gold: 30\"), String::from(\"rum: 12\")];\nassert_eq!(find_entry(&ledger, \"rum\"), Some(\"rum: 12\"));\n```\n\nThe returned `&str` borrows from the **ledger only**. The hidden tests drop the prefix before they use the result, so you have to write the lifetime annotations that say so. An empty prefix matches the first entry.\n\nKeep a `fn main()`; it can call `find_entry` or stay empty. After the tests pass, the tutor judges whether your solution is idiomatic.\n",
+      "starter": "// Write find_entry here: (ledger: &[String], prefix: &str) -> Option<&str>\n\nfn main() {}\n",
+      "reference": "fn find_entry<'a>(ledger: &'a [String], prefix: &str) -> Option<&'a str> {\n    ledger\n        .iter()\n        .find(|entry| entry.starts_with(prefix))\n        .map(|entry| entry.as_str())\n}\n\nfn main() {\n    let ledger = vec![String::from(\"gold: 30\"), String::from(\"rum: 12\")];\n    println!(\"{:?}\", find_entry(&ledger, \"rum\"));\n}\n",
+      "hints": [
+        "Two references go in and one comes out, so lifetime elision can't decide for you. Which input can the result actually point into?",
+        "Put a lifetime `'a` on `ledger` and on the result, and leave `prefix` with its own, unnamed lifetime. `str::starts_with` does the matching.",
+        "`fn find_entry<'a>(ledger: &'a [String], prefix: &str) -> Option<&'a str>`, with a body like `ledger.iter().find(|e| e.starts_with(prefix)).map(|e| e.as_str())`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    fn v(entries: &[&str]) -> Vec<String> {\n        entries.iter().map(|s| s.to_string()).collect()\n    }\n\n    #[test]\n    fn finds_the_matching_entry() {\n        let ledger = v(&[\"gold: 30\", \"rum: 12\", \"maps: 1\"]);\n        assert_eq!(find_entry(&ledger, \"rum\"), Some(\"rum: 12\"));\n    }\n\n    #[test]\n    fn returns_the_first_of_several_matches() {\n        let ledger = v(&[\"rum: 1\", \"gold: 30\", \"rum: 2\"]);\n        assert_eq!(find_entry(&ledger, \"rum\"), Some(\"rum: 1\"));\n    }\n\n    #[test]\n    fn missing_prefix_gives_none() {\n        let ledger = v(&[\"gold: 30\"]);\n        assert_eq!(find_entry(&ledger, \"silk\"), None);\n        assert_eq!(find_entry(&[], \"gold\"), None);\n    }\n\n    #[test]\n    fn empty_prefix_matches_the_first_entry() {\n        let ledger = v(&[\"gold: 30\", \"rum: 12\"]);\n        assert_eq!(find_entry(&ledger, \"\"), Some(\"gold: 30\"));\n    }\n\n    #[test]\n    fn result_borrows_from_the_ledger() {\n        let ledger = v(&[\"gold: 30\", \"rum: 12\"]);\n        let found = find_entry(&ledger, \"rum\").unwrap();\n        assert!(std::ptr::eq(found.as_ptr(), ledger[1].as_ptr()));\n    }\n\n    #[test]\n    fn result_outlives_the_prefix() {\n        let ledger = v(&[\"gold: 30\", \"rum: 12\"]);\n        let found;\n        {\n            let shout = String::from(\"gold\");\n            found = find_entry(&ledger, &shout);\n        }\n        assert_eq!(found, Some(\"gold: 30\"));\n    }\n}\n",
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): lend the value with & or &mut instead of copying it."
+          },
+          {
+            "pattern": "\\.to_string\\(\\)",
+            "message": "No .to_string(): copying the text dodges the borrow instead of fixing it."
+          },
+          {
+            "pattern": "\\.to_owned\\(\\)",
+            "message": "No .to_owned(): copying the text dodges the borrow instead of fixing it."
+          }
+        ]
+      },
+      "judge": "agent",
+      "rubric": "Idiomatic borrowing: the signature is fn find_entry<'a>(ledger: &'a [String], prefix: &str) -> Option<&'a str>. The lifetime ties the result to the ledger only; the prefix keeps its own elided lifetime. Taking &Vec<String> or &String instead of &[String] / &str costs points. Returning an owned String or cloning entries is not acceptable. The body uses str::starts_with and either an iterator chain (iter().find(..).map(String::as_str) or similar) or a plain for loop with an early return Some(entry); both are fine. Deduct points for index-based loops (for i in 0..ledger.len()), manual byte comparisons instead of starts_with, unnecessary 'static or extra lifetime parameters, or .unwrap() calls. Readability matters more than cleverness.\n"
+    },
+    {
+      "id": "l2-boss-lending",
+      "title": "Boss: Lend the Ledger, Keep the Ledger",
+      "kind": "boss",
+      "xp": 45,
+      "story": "Plunder day. Every officer reads, writes, and points into the ledger at once, and the tally program falls apart under the strain. Make it sound and the quartermaster's quill is yours.",
+      "prompt": "The program reads plunder lines `name: amount` from stdin and prints a tally. It does not compile: it has **borrowing and lifetime bugs**. Fix it so that, for the input\n\n```text\ngold: 30\nrum: 12\ngold: 5\nmaps: 1\nbad line\n```\n\nit prints exactly:\n\n```text\nentries: 4\ngold x35\nrum x12\nmaps x1\nfleet x48\nrichest: gold\n```\n\nRules:\n- Lines that don't parse as `name: amount` are skipped. Names and amounts are trimmed.\n- Totals keep the order in which names first appear. The last total is `fleet`, the sum of all the others.\n- `richest` is the name with the biggest total, not counting `fleet`. Ties keep the first. With no entries it prints `richest: none`.\n- Keep the five functions. You may change their signatures and bodies.\n- Totals keep borrowing names from the input text: no `.clone()`, `.to_string()`, `.to_owned()` or `String::from`.\n\nHidden cases include an empty input, a tie, and padded lines.\n",
+      "starter": "use std::io::{self, Read};\n\n// Parses \"name: amount\" lines. Lines that don't parse are skipped.\nfn parse(text: &str) -> Vec<(&str, u32)> {\n    let mut out = Vec::new();\n    for line in text.lines() {\n        if let Some((name, amount)) = line.split_once(':') {\n            if let Ok(n) = amount.trim().parse() {\n                out.push((name.trim(), n));\n            }\n        }\n    }\n    out\n}\n\n// Adds `amount` to the total for `name`, or appends a new total.\nfn credit(totals: &mut Vec<(&str, u32)>, name: &str, amount: u32) {\n    for t in totals.iter_mut() {\n        if t.0 == name {\n            t.1 += amount;\n            return;\n        }\n    }\n    totals.push((name, amount));\n}\n\n// The name with the biggest total. Ties keep the first.\nfn richest(totals: &[(&str, u32)]) -> Option<&str> {\n    let mut best: Option<(&str, u32)> = None;\n    for &(name, total) in totals {\n        match best {\n            Some((_, b)) if b >= total => {}\n            _ => best = Some((name, total)),\n        }\n    }\n    best.map(|(name, _)| name)\n}\n\n// \"name xN\", e.g. \"gold x35\".\nfn label(name: &str, total: u32) -> &str {\n    let s = format!(\"{name} x{total}\");\n    &s\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    let entries = parse(&text);\n    println!(\"entries: {}\", entries.len());\n    let mut totals = Vec::new();\n    for (name, amount) in entries {\n        credit(&mut totals, name, amount);\n    }\n    let top = richest(&totals);\n    for (_, total) in &totals {\n        credit(&mut totals, \"fleet\", *total);\n    }\n    for (name, total) in &totals {\n        println!(\"{}\", label(name, *total));\n    }\n    println!(\"richest: {}\", top.unwrap_or(\"none\"));\n}\n",
+      "reference": "use std::io::{self, Read};\n\n// Parses \"name: amount\" lines. Lines that don't parse are skipped.\nfn parse(text: &str) -> Vec<(&str, u32)> {\n    let mut out = Vec::new();\n    for line in text.lines() {\n        if let Some((name, amount)) = line.split_once(':') {\n            if let Ok(n) = amount.trim().parse() {\n                out.push((name.trim(), n));\n            }\n        }\n    }\n    out\n}\n\n// Adds `amount` to the total for `name`, or appends a new total.\nfn credit<'a>(totals: &mut Vec<(&'a str, u32)>, name: &'a str, amount: u32) {\n    for t in totals.iter_mut() {\n        if t.0 == name {\n            t.1 += amount;\n            return;\n        }\n    }\n    totals.push((name, amount));\n}\n\n// The name with the biggest total. Ties keep the first.\nfn richest<'a>(totals: &[(&'a str, u32)]) -> Option<&'a str> {\n    let mut best: Option<(&str, u32)> = None;\n    for &(name, total) in totals {\n        match best {\n            Some((_, b)) if b >= total => {}\n            _ => best = Some((name, total)),\n        }\n    }\n    best.map(|(name, _)| name)\n}\n\n// \"name xN\", e.g. \"gold x35\".\nfn label(name: &str, total: u32) -> String {\n    format!(\"{name} x{total}\")\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    let entries = parse(&text);\n    println!(\"entries: {}\", entries.len());\n    let mut totals = Vec::new();\n    for (name, amount) in entries {\n        credit(&mut totals, name, amount);\n    }\n    let top = richest(&totals);\n    let fleet: u32 = totals.iter().map(|t| t.1).sum();\n    credit(&mut totals, \"fleet\", fleet);\n    for (name, total) in &totals {\n        println!(\"{}\", label(name, *total));\n    }\n    println!(\"richest: {}\", top.unwrap_or(\"none\"));\n}\n",
+      "hints": [
+        "Rustc reports these errors in waves: lifetime errors in signatures come first, borrow errors in bodies only after those are fixed. Fix one function at a time and recompile.",
+        "`label` builds a new string, so it must return an owned `String`. `richest` takes a slice of tuples that hold `&str`, so two lifetimes go in and elision gives up. Name the one the result really comes from: the names, not the slice.",
+        "`credit` stores `name` inside `totals`, so `name` must live as long as the names already in there: `fn credit<'a>(totals: &mut Vec<(&'a str, u32)>, name: &'a str, amount: u32)`. In `main`, you can't credit `totals` while you are iterating over it. Compute the fleet sum first, then credit it once.",
+        "`fn richest<'a>(totals: &[(&'a str, u32)]) -> Option<&'a str>` makes `top` borrow the input text, not `totals`, so you may still change `totals` afterwards. If you wrote `&'a [(&'a str, u32)]`, `top` keeps `totals` frozen and crediting `fleet` fails with E0502. Then: `let fleet: u32 = totals.iter().map(|t| t.1).sum(); credit(&mut totals, \"fleet\", fleet);`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "plunder day with a bad line",
+            "stdin": "gold: 30\nrum: 12\ngold: 5\nmaps: 1\nbad line\n",
+            "expected": "entries: 4\ngold x35\nrum x12\nmaps x1\nfleet x48\nrichest: gold\n"
+          },
+          {
+            "name": "tie keeps the first",
+            "stdin": "rum: 5\nsilk: 5\n",
+            "expected": "entries: 2\nrum x5\nsilk x5\nfleet x10\nrichest: rum\n"
+          },
+          {
+            "name": "padded lines and a bad amount",
+            "stdin": "  pearls :  7 \nmaps: lots\n",
+            "expected": "entries: 1\npearls x7\nfleet x7\nrichest: pearls\n"
+          },
+          {
+            "name": "empty input",
+            "stdin": "",
+            "expected": "entries: 0\nfleet x0\nrichest: none\n"
+          },
+          {
+            "name": "later total overtakes",
+            "stdin": "rum: 10\ngold: 8\ngold: 8\n",
+            "expected": "entries: 3\nrum x10\ngold x16\nfleet x26\nrichest: gold\n"
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): lend the value with & or &mut instead of copying it."
+          },
+          {
+            "pattern": "\\.to_string\\(\\)",
+            "message": "No .to_string(): copying the text dodges the borrow instead of fixing it."
+          },
+          {
+            "pattern": "\\.to_owned\\(\\)",
+            "message": "No .to_owned(): copying the text dodges the borrow instead of fixing it."
+          },
+          {
+            "pattern": "String::from",
+            "message": "No String::from: the totals should borrow names from the input text."
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "l2-card-rule",
+      "front": "What is the borrowing rule for a value at any one moment?",
+      "back": "**Either** any number of shared borrows (`&T`) **or** exactly one mutable borrow (`&mut T`), never both. Aliasing XOR mutation.",
+      "unlockAfter": "l2-predict-aliasing"
+    },
+    {
+      "id": "l2-card-e0502",
+      "front": "What does E0502 mean, and why does `let f = &v[0]; v.push(x); use(f);` trigger it?",
+      "back": "E0502: cannot borrow as mutable because it is also borrowed as immutable. `push` needs `&mut v` while `f` still borrows `v`. `push` may reallocate the buffer, which would leave `f` dangling.",
+      "unlockAfter": "l2-predict-aliasing"
+    },
+    {
+      "id": "l2-card-nll",
+      "front": "How long does a borrow last?",
+      "back": "Until the reference's **last use**, not until the end of the block (non-lexical lifetimes). Reordering code so all reads finish before a write often fixes E0502 and E0499.",
+      "unlockAfter": "l2-predict-nll"
+    },
+    {
+      "id": "l2-card-e0499",
+      "front": "What does E0499 mean?",
+      "back": "Cannot borrow as mutable more than once at a time: a second `&mut` was created while the first is still used later. Finish using the first `&mut` before taking another.",
+      "unlockAfter": "l2-fix-quills"
+    },
+    {
+      "id": "l2-card-e0515",
+      "front": "A function builds a `String` and tries to return `&s`. What does rustc say, and what is the fix?",
+      "back": "E0515: cannot return a reference to a local variable. The local is dropped when the function returns. Return the owned value instead: `-> String`.",
+      "unlockAfter": "l2-fix-dangling"
+    },
+    {
+      "id": "l2-card-longest",
+      "front": "What does `fn longest<'a>(a: &'a str, b: &'a str) -> &'a str` promise?",
+      "back": "The returned reference is valid only while **both** inputs are. Without the annotation it's E0106 (missing lifetime specifier), because with two reference inputs rustc can't tell which one the result borrows from.",
+      "unlockAfter": "l2-fix-dangling"
+    },
+    {
+      "id": "l2-card-slices",
+      "front": "Why prefer `&str` and `&[T]` parameters over `&String` and `&Vec<T>`?",
+      "back": "They accept more callers: literals, sub-slices like `&v[1..]`, arrays, and `&String`/`&Vec<T>` through coercion. They also say exactly what's needed: a read-only view.",
+      "unlockAfter": "l2-complete-slices"
+    },
+    {
+      "id": "l2-card-one-lifetime",
+      "front": "`fn find<'a>(xs: &'a [String], key: &str) -> Option<&'a str>`: why does `key` have no `'a`?",
+      "back": "The result only ever points into `xs`. Tying it to `key` too would keep `key` borrowed as long as the result is used, and callers couldn't drop a temporary key early. Put the lifetime only on the inputs the result can come from.",
+      "unlockAfter": "l2-write-find-entry"
+    }
+  ]
+}
