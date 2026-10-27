@@ -1,6 +1,6 @@
 # rust-tutor
 
-A self-hosted, LAN-only Rust course with five levels and 34 challenges. It has a Monaco editor with rustc diagnostics,
+A self-hosted, LAN-only Rust course with eight levels and 56 challenges: a prelude of three basics levels (0A First Steps, 0B Strings & Text, 0C Collections & Loops) followed by five core levels (1 Ownership to 5 Error Handling). It has a Monaco editor with rustc diagnostics,
 a stack/heap visualizer and a spaced-repetition review queue. An optional tutor runs on the CE lane and provides hints, explanations,
 code review and idiom judging through pi-task-runner.
 
@@ -61,3 +61,6 @@ Press `?` in the app for the full list.
 ## Lessons
 
 Lessons are JSON files in `lessons/`. See [lessons/AUTHORING.md](lessons/AUTHORING.md). Run `make check-lessons` after any change.
+
+Track 1 is `level-0a/0b/0c.json` (section `prelude`, labels 0A–0C, order 1–3) and then `level-1..5.json` (section `core`, labels 1–5, order 4–8).
+Progress is keyed by level and challenge id, so inserting or renumbering levels keeps learner data. A level with any saved progress is never locked.

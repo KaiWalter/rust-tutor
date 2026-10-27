@@ -63,7 +63,7 @@ The mitigations are the non-root uid, the read-only rootfs, the rlimits and the 
 ## Learning flow
 
 Each level has a quest story, concepts, a memory visualizer (`web/js/visual.js`, snapshot stepper with own/borrow/mut/moved arrows), 5–8 challenges
-(predict → fix → complete → write → boss) and review cards. A level unlocks once the previous level's boss passes (`store.progress`). Within a level, a challenge opens once the previous one passes; this ordering is enforced by the UI only, and the API verifies any challenge.
+(predict → fix → complete → write → boss) and review cards. A level unlocks once the previous level's boss passes, or as soon as it has any saved challenge state (`store.progress`). That rule grandfathers progress made before levels were inserted ahead of it: Level 1 stayed open when the 0A–0C prelude was added. Levels carry an `order` (sequence, 1..n), a learner-facing `label` ("0A", "1") and a `section` (`prelude` | `core`), and the map groups them by section. Within a level, a challenge opens once the previous one passes; this ordering is enforced by the UI only, and the API verifies any challenge.
 XP is awarded on the first pass only (enforced by a unique index on `xp_events`). A streak is the count of consecutive active days in `TUTOR_TZ`.
 Cards unlock when their `unlockAfter` challenge passes. The review queue uses SM-2-style ease and interval scheduling with grades 0–3.
 
@@ -120,7 +120,7 @@ A sweeper refreshes unfinished jobs every 10 s, so the 120 s timeout and cancel 
 - `make test`: node:test suite in the image with the real rustc (allowlist, app routes, lessons validation, sandbox limits, rustc front end, verify, store, agent with a fake runner over HTTP, web md/visual).
 - `make check-lessons`: every challenge's reference passes and starter fails, and the predict answers agree with rustc.
 - `make smoke`: live API checks, including infinite loop, endless compile, memory hog, fork bomb and output flood.
-- `make soak`: headless-Chromium UI walk-through of level 1 with Monaco markers, CSP-violation / off-origin / console-error checks, and a CE-lane hint.
+- `make soak`: headless-Chromium UI walk-through of the first level (`LEVEL=<id>` picks another; it needs a fresh data dir because it passes challenges) with Monaco markers, CSP-violation / off-origin / console-error checks, and a CE-lane hint.
 - `make agent-e2e`: real pi-task-runner end to end; `EXPECT=unavailable` checks the fallback.
 - `make verify-access`: the reachability matrix.
 
@@ -131,4 +131,5 @@ The evidence is in `~/.pi/chief-engineer/specs/rust-tutor/verification.md`.
 - Compiled learner programs share the host network namespace (see the sandbox section).
 - Tutor latency is that of a full agent run, about 6–10 s per tier.
 - The judge verdict is advisory and does not gate progress.
-- The browser smoke drives level 1 only. Levels 2–5 are proven via check-lessons and the API.
+- The browser smoke drives one level per run (by default 0A). Run it against a throwaway container (`make run NAME=rust-tutor-soak PORT=5021 DATA=/tmp/rt-soak-data`), never the live data. The other levels are proven via check-lessons and the API.
+- New learners must beat each prelude boss before Level 1 opens; there is no "skip prelude" switch.
