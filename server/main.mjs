@@ -6,6 +6,7 @@ import http from "node:http";
 import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createAgent, createRunnerClient, loadPrompts } from "./agent.mjs";
 import { createAllowlist } from "./allowlist.mjs";
 import { createApp } from "./app.mjs";
 import { loadLessons } from "./lessons.mjs";
@@ -42,7 +43,20 @@ async function main() {
   });
   await allowlist.start();
 
-  const app = createApp({ rust, catalog, store, allowlist, staticDir: env.STATIC_DIR || path.join(root, "web"), agent: null });
+  // RUNNER_URL="" disables the CE lane entirely (the UI then shows built-in hints only).
+  const agent = env.RUNNER_URL === ""
+    ? null
+    : createAgent({
+        runner: createRunnerClient({ baseUrl: env.RUNNER_URL || "http://127.0.0.1:4930" }),
+        prompts: loadPrompts(env.PROMPTS_DIR || path.join(root, "prompts")),
+        role: env.AGENT_ROLE || "chief-engineer",
+        timeoutMs: Number(env.AGENT_TIMEOUT_S || 120) * 1000,
+        catalog,
+        store,
+        rust,
+      });
+
+  const app = createApp({ rust, catalog, store, allowlist, staticDir: env.STATIC_DIR || path.join(root, "web"), agent });
 
   const tls = env.TLS_CERT && fs.existsSync(env.TLS_CERT);
   const server = tls
@@ -57,12 +71,14 @@ async function main() {
     const snap = allowlist.snapshot();
     console.log(
       `rust-tutor listening on ${tls ? "https" : "http"}://[${bindHost}]:${port} levels=${catalog.levels.length} ` +
-        `challenges=${catalog.levels.reduce((n, l) => n + l.challenges.length, 0)} ${v.rustc} | ${v.rustfmt} allowlist=${snap.entries}`,
+        `challenges=${catalog.levels.reduce((n, l) => n + l.challenges.length, 0)} ${v.rustc} | ${v.rustfmt} allowlist=${snap.entries} ` +
+        `agent=${agent ? env.RUNNER_URL || "http://127.0.0.1:4930" : "off"}`,
     );
   });
 
   const shutdown = () => {
     allowlist.stop();
+    agent?.stop();
     server.close(() => {
       store.close();
       process.exit(0);
