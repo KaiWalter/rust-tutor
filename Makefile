@@ -24,7 +24,7 @@ SANDBOX_FLAGS = --init --pids-limit 256 --memory 2g --memory-swap 2g --cpus 2 \
   --read-only --tmpfs /tmp:rw,exec,nosuid,nodev,size=512m \
   --cap-drop ALL --security-opt no-new-privileges
 
-.PHONY: build run stop restart logs health test test-host check-lessons verify-access smoke soak
+.PHONY: build run stop restart logs health test test-host check-lessons verify-access smoke soak agent-e2e
 
 build:
 	docker build -t $(IMAGE) .
@@ -85,3 +85,8 @@ smoke:
 # Browser smoke (Monaco markers etc.). Needs PLAYWRIGHT_CORE + CHROMIUM (not deps).
 soak:
 	CA=$(CERT_DIR)/ca.crt BASE=https://$(HOSTNAME_LAN):$(PORT) node scripts/browser-smoke.mjs
+
+# CE-lane tutor end-to-end through the real pi-task-runner (hint x3, explain,
+# review, judge + cache). EXPECT=unavailable checks the fallback instead.
+agent-e2e:
+	CA=$(CERT_DIR)/ca.crt BASE=https://localhost:$(PORT) node scripts/agent-e2e.mjs

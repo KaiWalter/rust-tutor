@@ -1,6 +1,8 @@
 /* rust-tutor layout on top of theme.css (default CE dark theme). */
 
 html, body { height: 100%; }
+/* Views and panels toggle via the hidden attribute; layout rules must not override it. */
+[hidden] { display: none !important; }
 body { display: flex; flex-direction: column; overflow: hidden; }
 button { font: inherit; }
 a { color: #7fb8ff; }

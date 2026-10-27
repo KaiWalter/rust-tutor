@@ -1,5 +1,5 @@
 // API smoke against a running instance: format/check/run/verify round trips,
-// limits (infinite loop, memory hog, fork bomb, output flood), restart-safe progress.
+// limits (endless compile, infinite loop, memory hog, fork bomb, output flood), restart-safe progress.
 // Usage: BASE=https://localhost:5020 NODE_EXTRA_CA_CERTS=<ca.crt> node scripts/smoke.mjs
 // (CA=<ca.crt> is accepted as a shortcut and re-execs with NODE_EXTRA_CA_CERTS.)
 
@@ -43,6 +43,12 @@ expect("run prints", r.json?.run?.stdout === "hello from rustc\n", `${r.ms}ms`);
 
 const loop = await call("POST", "/api/run", { code: "fn main() { loop {} }" });
 expect("infinite loop killed at 5s", loop.json?.run?.timedOut === true && loop.ms < 8000, `${loop.ms}ms`);
+
+// Const evaluation that never ends: rustc itself must be killed at the 10 s compile limit.
+const slow = await call("POST", "/api/check", {
+  code: "#![allow(long_running_const_eval)]\nconst X: u64 = {\n    let mut i = 0u64;\n    while i < u64::MAX {\n        i += 1;\n    }\n    i\n};\nfn main() {\n    println!(\"{X}\");\n}\n",
+});
+expect("endless compile killed at 10s", slow.json?.timedOut === true && slow.ms < 13000, `${slow.ms}ms`);
 
 const hog = await call("POST", "/api/run", { code: "fn main() { let mut v: Vec<Vec<u8>> = Vec::new(); loop { v.push(vec![1u8; 1 << 20]); } }" });
 expect("memory hog aborted by RLIMIT_AS", hog.json?.run?.signal === "SIGABRT", `${hog.ms}ms ${hog.json?.run?.stderr?.split("\n")[0]}`);

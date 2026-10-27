@@ -69,6 +69,7 @@ await page.goto(`${BASE}/#/map`);
 await page.waitForSelector("body[data-ready='1']", { timeout: 30000 });
 const cards = await page.locator(".level-card").count();
 expect("level map renders every level", cards === levels.length, `${cards} card(s)`);
+expect("only the map view is visible", (await page.locator("#view-challenge").isHidden()) && (await page.locator("#view-review").isHidden()));
 expect("top bar shows XP/streak/review", /XP/.test(await page.textContent("#stat-xp")) && /due/.test(await page.textContent("#stat-review")));
 await shot("01-map");
 
@@ -76,8 +77,10 @@ await shot("01-map");
 const [first, second] = level.challenges;
 await page.goto(`${BASE}/#/c/${second.id}`);
 await page.waitForTimeout(400);
-const fresh = !(await page.evaluate(() => window.__tutor.S.progress.levels[0].challenges[0].passed));
+// A solved challenge stays open, so this only applies while neither is passed.
+const fresh = await page.evaluate(() => window.__tutor.S.progress.levels[0].challenges.slice(0, 2).every((c) => !c.passed));
 if (fresh) expect("locked challenge redirects", !page.url().endsWith(`/c/${second.id}`), page.url());
+else console.log("SKIP locked challenge redirects (first or second challenge already passed)");
 
 // ---- monaco + first challenge
 await page.goto(`${BASE}/#/c/${first.id}`);
@@ -174,6 +177,11 @@ await shot("05-tests");
 await page.keyboard.press("Alt+h");
 await page.waitForSelector("#tutor .tutor-msg", { timeout: 5000 });
 expect("Alt+H opens a tutor card", true);
+// The card resolves to either the agent answer or the built-in fallback, within the 120 s budget.
+await page.waitForFunction(() => !document.querySelector("#tutor .tutor-msg").classList.contains("pending"), null, { timeout: 150000 });
+const tutor = await page.evaluate(() => ({ fallback: document.querySelector("#tutor .tutor-msg").classList.contains("fallback"), text: document.querySelector("#tutor .tutor-msg .body").textContent.trim() }));
+expect(`tutor hint answered (${tutor.fallback ? "built-in fallback" : "CE lane"})`, tutor.text.length > 20, `"${tutor.text.slice(0, 90)}"`);
+await page.locator("#tutor").screenshot({ path: path.join(SHOTS, "05b-tutor.png") });
 
 // ---- persistence: reload restores code
 await setEditor('fn main() {\n    // persisted-marker\n}\n');
