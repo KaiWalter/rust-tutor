@@ -20,7 +20,7 @@ UNTRUSTED-{{nonce}}>>>
 
 ## How to answer
 
-- Explain the root cause in terms of the Rust concept this level teaches (ownership, borrowing, lifetimes, types, traits, error handling), not just restating the error message.
+- Explain the root cause in terms of the Rust concept this level teaches (basic syntax, strings, collections, ownership, borrowing, lifetimes, types, traits, error handling), not just restating the error message.
 - If there are several errors, explain the first real one. Later ones are often consequences.
 - Point at the learner's line(s). Do not hand over the full corrected program. A one-line illustrative snippet is fine.
 - `next_step` is one concrete action the learner should try next, in one sentence.

@@ -201,7 +201,10 @@ export function openStore(file, { timeZone = "Europe/Berlin", now = () => Date.n
         };
       });
       const passedCount = challenges.filter((c) => c.passed).length;
-      levels.push({ id: l.id, unlocked: prevBossPassed, passed: passedCount, total: challenges.length, complete: passedCount === challenges.length, challenges });
+      // A level with any saved state stays open even if levels were later
+      // inserted before it (e.g. the prelude): progress never gets locked away.
+      const started = l.challenges.some((c) => rows.has(c.id));
+      levels.push({ id: l.id, unlocked: prevBossPassed || started, passed: passedCount, total: challenges.length, complete: passedCount === challenges.length, challenges });
       prevBossPassed = challenges.at(-1).passed;
     }
     return {

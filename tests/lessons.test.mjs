@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { createCatalog, loadLessons, LessonError, publicLevel, validateLevel } from "../server/lessons.mjs";
+import { fixtureCopy } from "./fixtures/copy.mjs";
 
 const fixtureDir = new URL("./fixtures/lessons/", import.meta.url).pathname;
 const base = () => JSON.parse(fs.readFileSync(`${fixtureDir}/level-1.json`, "utf8"));
@@ -38,6 +41,8 @@ const broken = [
   ["card unlock unknown", (l) => (l.cards[0].unlockAfter = "nope"), /unknown challenge nope/],
   ["judge without rubric", (l) => delete l.challenges[3].rubric, /rubric: must be a non-empty string/],
   ["too few challenges", (l) => l.challenges.splice(1, 1), /5\.\.8 items/],
+  ["label with punctuation", (l) => (l.label = "0-A"), /label: must be 1-4 letters\/digits/],
+  ["unknown section", (l) => (l.section = "intro"), /section: must be one of prelude, core/],
 ];
 for (const [name, mutate, re] of broken) {
   test(`schema rejects: ${name}`, () => {
@@ -46,3 +51,29 @@ for (const [name, mutate, re] of broken) {
     assert.throws(() => validateLevel(l, "x.json"), (e) => e instanceof LessonError && re.test(e.message));
   });
 }
+
+function loadDir(levels) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rt-lessons-"));
+  levels.forEach((l, i) => fs.writeFileSync(path.join(dir, `level-${i}.json`), JSON.stringify(l)));
+  try {
+    return loadLessons(dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true });
+  }
+}
+
+test("label and section default to order and core; prelude sorts first", () => {
+  const cat = loadDir([fixtureCopy("b", { order: 2 }), fixtureCopy("a", { order: 1, label: "0A", section: "prelude" })]);
+  assert.deepEqual(
+    cat.levels.map((l) => [publicLevel(l).label, publicLevel(l).section]),
+    [["0A", "prelude"], ["2", "core"]],
+  );
+});
+
+test("loader rejects duplicate labels and prelude after core", () => {
+  assert.throws(() => loadDir([fixtureCopy("a", { order: 1, label: "X" }), fixtureCopy("b", { order: 2, label: "X" })]), /label X already used/);
+  assert.throws(
+    () => loadDir([fixtureCopy("a", { order: 1 }), fixtureCopy("b", { order: 2, label: "0A", section: "prelude" })]),
+    /section prelude must not come after core/,
+  );
+});

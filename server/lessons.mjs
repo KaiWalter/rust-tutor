@@ -10,7 +10,10 @@ import path from "node:path";
 export const CHALLENGE_KINDS = ["predict", "fix", "complete", "write", "boss"];
 export const CHECK_KINDS = ["tests", "output", "choice"];
 export const ARROW_KINDS = ["own", "borrow", "mut", "moved"];
+// Map sections, in display order: a short prelude of basics, then the core track.
+export const SECTIONS = ["prelude", "core"];
 const ID = /^[a-z0-9][a-z0-9-]*$/;
+const LABEL = /^[0-9A-Za-z]{1,4}$/;
 
 export class LessonError extends Error {}
 
@@ -139,6 +142,9 @@ export function validateLevel(level, file = "level") {
   str(level.id, `${w}.id`);
   if (!ID.test(level.id)) fail(`${w}.id`, "must be kebab-case");
   int(level.order, `${w}.order`, { min: 1, max: 99 });
+  // label: what the learner sees ("0A", "1"); order only sequences the levels
+  if (level.label !== undefined && (typeof level.label !== "string" || !LABEL.test(level.label))) fail(`${w}.label`, "must be 1-4 letters/digits");
+  if (level.section !== undefined && !SECTIONS.includes(level.section)) fail(`${w}.section`, `must be one of ${SECTIONS.join(", ")}`);
   str(level.title, `${w}.title`, { max: 80 });
   str(level.summary, `${w}.summary`, { max: 300 });
   if (typeof level.quest !== "object" || !level.quest) fail(`${w}.quest`, "must be an object");
@@ -209,8 +215,14 @@ export function loadLessons(dir) {
   });
   levels.sort((a, b) => a.order - b.order);
   const seen = new Map();
+  const labels = new Map();
   levels.forEach((l, i) => {
     if (l.order !== i + 1) throw new LessonError(`${l.id}: level orders must be 1..${levels.length} without gaps`);
+    const label = levelLabel(l);
+    if (labels.has(label)) throw new LessonError(`${l.id}: label ${label} already used by ${labels.get(label)}`);
+    labels.set(label, l.id);
+    if (i > 0 && SECTIONS.indexOf(levelSection(l)) < SECTIONS.indexOf(levelSection(levels[i - 1])))
+      throw new LessonError(`${l.id}: section ${levelSection(l)} must not come after ${levelSection(levels[i - 1])}`);
     for (const id of [l.id, ...l.challenges.map((c) => c.id), ...l.cards.map((c) => c.id)]) {
       if (seen.has(id)) throw new LessonError(`id ${id} used in ${seen.get(id)} and ${l.id}`);
       seen.set(id, l.id);
@@ -251,10 +263,15 @@ export function publicChallenge(ch) {
   };
 }
 
+export const levelLabel = (l) => l.label ?? String(l.order);
+export const levelSection = (l) => l.section ?? "core";
+
 export function publicLevel(l) {
   return {
     id: l.id,
     order: l.order,
+    label: levelLabel(l),
+    section: levelSection(l),
     title: l.title,
     summary: l.summary,
     quest: l.quest,

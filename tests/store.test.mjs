@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadLessons } from "../server/lessons.mjs";
+import { createCatalog, loadLessons, validateLevel } from "../server/lessons.mjs";
+import { fixtureCopy } from "./fixtures/copy.mjs";
 import { dayKey, openStore, scheduleCard, streakFrom } from "../server/store.mjs";
 
 const DAY = 86_400_000;
@@ -87,6 +88,32 @@ test("verify records attempts, awards XP once, unlocks cards, persists across re
 
   s.cachePut("k", "judge", { pass: true });
   assert.deepEqual(s.cacheGet("k"), { pass: true });
+  s.close();
+  fs.rmSync(dir, { recursive: true });
+});
+
+test("levels unlock by boss, but a level with saved progress is never locked", () => {
+  // Prelude inserted before a level the learner already started (the 0A/0B/0C migration).
+  const cat = createCatalog(
+    [
+      fixtureCopy("p", { order: 1, label: "0A", section: "prelude" }),
+      fixtureCopy("c", { order: 2, label: "1" }),
+      fixtureCopy("d", { order: 3, label: "2" }),
+    ].map((l) => validateLevel(l)),
+  );
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rt-store-"));
+  const s = openStore(path.join(dir, "p.db"), { now: () => T0, timeZone: "UTC" });
+  const unlocked = () => s.progress(cat).levels.map((l) => l.unlocked);
+  assert.deepEqual(unlocked(), [true, false, false], "fresh learner: only the first level");
+
+  s.recordVerify(cat.challenge("c-predict"), { passed: true, answer: "E0382" }, cat);
+  assert.deepEqual(unlocked(), [true, true, false], "started level stays open; the one after still needs its boss");
+
+  s.saveCode(cat.challenge("d-fix"), { code: "fn main() {}" });
+  assert.deepEqual(unlocked(), [true, true, true], "saved code alone keeps a level open");
+
+  const p = s.progress(cat).levels[0];
+  assert.equal(p.passed, 0, "prelude progress is untouched");
   s.close();
   fs.rmSync(dir, { recursive: true });
 });

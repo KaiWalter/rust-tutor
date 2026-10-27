@@ -252,6 +252,8 @@ details.concept > div { padding: 0 12px 8px; }
 .map-view, .review-view { overflow: auto; }
 .map-inner, .review-inner { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .levels { display: grid; gap: 14px; }
+.map-section { margin: 28px 0 2px; font-size: 1.15rem; }
+.map-section + p { margin: 0 0 12px; }
 .level-card { display: grid; grid-template-columns: 64px 1fr auto; gap: 16px; align-items: center; }
 .level-card.locked { opacity: 0.45; }
 .level-num {

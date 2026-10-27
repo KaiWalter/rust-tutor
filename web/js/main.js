@@ -382,20 +382,26 @@ function renderMap() {
   switchView("map");
   crumbs([["Level map"]]);
   const firstOpen = S.progress.levels.find((l) => l.unlocked && !l.complete);
+  const prelude = S.levels.filter((l) => l.section === "prelude");
+  const core = S.levels.filter((l) => l.section !== "prelude");
+  const card = (l) => {
+    const p = progressOf(l.id);
+    const cls = [!p.unlocked && "locked", p.complete && "complete", firstOpen?.id === l.id && "current"].filter(Boolean).join(" ");
+    const pct = Math.round((100 * p.passed) / p.total);
+    return `<a class="ui-card level-card ${cls}" href="${p.unlocked ? `#/l/${l.id}` : "#/map"}" style="color:inherit;text-decoration:none" ${p.unlocked ? "" : 'aria-disabled="true"'}>
+      <div class="level-num">${p.complete ? "✓" : esc(l.label)}</div>
+      <div><h3>${esc(l.title)}</h3><p class="ui-muted">${esc(l.quest.title)}: ${esc(l.summary)}</p><div class="progressbar"><div style="width:${pct}%"></div></div></div>
+      <div class="ui-status ui-status--${p.complete ? "success" : p.unlocked ? "neutral" : "warning"}">${p.unlocked ? `${p.passed}/${p.total}` : "🔒 beat the previous boss"}</div></a>`;
+  };
+  const section = (title, blurb, levels) =>
+    levels.length ? `<h2 class="map-section">${title}</h2><p class="ui-muted">${blurb}</p><div class="levels">${levels.map(card).join("")}</div>` : "";
+  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   $("#view-map").innerHTML = `<div class="map-inner">
-    <h1>Track 1: Ownership to Error Handling</h1>
-    <p class="ui-muted">Five levels. Beat a level's boss challenge to unlock the next. Passed challenges add review cards to your spaced-repetition queue.</p>
-    <div class="levels">${S.levels
-      .map((l) => {
-        const p = progressOf(l.id);
-        const cls = [!p.unlocked && "locked", p.complete && "complete", firstOpen?.id === l.id && "current"].filter(Boolean).join(" ");
-        const pct = Math.round((100 * p.passed) / p.total);
-        return `<a class="ui-card level-card ${cls}" href="${p.unlocked ? `#/l/${l.id}` : "#/map"}" style="color:inherit;text-decoration:none" ${p.unlocked ? "" : 'aria-disabled="true"'}>
-          <div class="level-num">${p.complete ? "✓" : l.order}</div>
-          <div><h3>${esc(l.title)}</h3><p class="ui-muted">${esc(l.quest.title)}: ${esc(l.summary)}</p><div class="progressbar"><div style="width:${pct}%"></div></div></div>
-          <div class="ui-status ui-status--${p.complete ? "success" : p.unlocked ? "neutral" : "warning"}">${p.unlocked ? `${p.passed}/${p.total}` : "🔒 beat the previous boss"}</div></a>`;
-      })
-      .join("")}</div></div>`;
+    <h1>Track 1: First Steps to Error Handling</h1>
+    <p class="ui-muted">${prelude.length ? `A prelude of ${count(prelude.length, "level", "levels")}, then ` : ""}${count(core.length, "core level", "core levels")}. Beat a level's boss challenge to unlock the next. Passed challenges add review cards to your spaced-repetition queue.</p>
+    ${section("Prelude: the basics", "Syntax, text and lists: everything the core levels take for granted.", prelude)}
+    ${section("Core levels", "Ownership, borrowing, types, traits and error handling.", core)}
+  </div>`;
   $(".level-card.current, .level-card:not(.locked)")?.focus();
 }
 
@@ -438,7 +444,7 @@ function renderLesson() {
   const keepVisualOpen = host.dataset.level === levelId;
   host.dataset.level = levelId;
   host.innerHTML = `
-    <div class="ui-muted kind-tag">Level ${level.order} · ${esc(level.title)}</div>
+    <div class="ui-muted kind-tag">Level ${esc(level.label)} · ${esc(level.title)}</div>
     <div class="challenge-strip">${strip}</div>
     <div class="kind-tag"><span class="ui-status ui-status--${ch.kind === "boss" ? "warning" : "neutral"}">${esc(ch.kind)}</span>
       <span class="ui-muted">${ch.xp} XP${ch.judged ? " · judged by the tutor" : ""}${S.cur.state.passed ? " · ✓ solved" : ""}</span></div>
@@ -466,7 +472,7 @@ async function openChallenge(id) {
   S.cur = v;
   S.answer = v.state.answer;
   S.lastVerify = null;
-  crumbs([["Map", "#/map"], [`L${loc.l.order} ${loc.l.title}`, `#/l/${loc.l.id}`], [v.challenge.title]]);
+  crumbs([["Map", "#/map"], [`L${loc.l.label} ${loc.l.title}`, `#/l/${loc.l.id}`], [v.challenge.title]]);
   renderLesson();
   S.loadingCode = true;
   S.ed.load(v.state.code ?? v.challenge.starter);

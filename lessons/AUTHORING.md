@@ -7,10 +7,16 @@ that every challenge is solvable and not pre-solved.
 
 ## Level shape
 
+Progress is stored by level and challenge **id**, never by `order`. You can insert levels and renumber
+`order` freely, but never rename an id that has shipped. A level with any saved progress stays unlocked even
+if a level inserted before it hasn't been beaten yet.
+
 ```jsonc
 {
   "id": "ownership",                  // kebab-case, unique across all levels
-  "order": 1,                         // levels are 1..n without gaps
+  "order": 4,                         // sequence and unlock order: 1..n without gaps
+  "label": "1",                       // optional, shown to the learner ("0A", "1"); 1–4 letters/digits, unique; default String(order)
+  "section": "core",                  // optional: "prelude" | "core" (default); prelude levels must come first
   "title": "Ownership & Moves",       // ≤ 80 chars
   "summary": "…",                     // ≤ 300 chars, shown on the level map
   "quest": { "title": "…", "story": "…" },      // story ≤ 3000 chars, Markdown
@@ -54,7 +60,7 @@ No HTML, no links, no images. Everything is escaped.
 
 ```jsonc
 {
-  "id": "l1-move-predict",          // kebab-case, unique across ALL levels (prefix with lN-)
+  "id": "l1-move-predict",          // kebab-case, unique across ALL levels (prefix with the label: l1-, l0a-)
   "title": "…",                     // ≤ 80
   "kind": "predict" | "fix" | "complete" | "write" | "boss",
   "xp": 10,                         // predict 10, fix/complete 15, write 20, boss 40 (guideline)
