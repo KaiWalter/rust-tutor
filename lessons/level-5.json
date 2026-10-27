@@ -1,0 +1,702 @@
+{
+  "id": "errors",
+  "order": 5,
+  "title": "Option & Result: Error Handling",
+  "summary": "No null, no exceptions. Model absence with Option, failure with Result, propagate with ?, and give your errors names with custom enums.",
+  "quest": {
+    "title": "The Damaged Treasure Map",
+    "story": "The last voyage of the Crab Fleet's first season ends in a storm. When the sea calms, the captain unrolls the treasure map and groans: salt water has smeared half the ink. Some lines still read `N 3` or `E 10`. Others say `E x`, `Q 5`, or nothing at all.\n\nThe old quartermaster's map reader treated every line as perfect. It called `.unwrap()` on everything, and the first smudge sank the whole program with a **panic**.\n\nOn this crew, **any line can be bad**, and a good program says *which* line and *why*, instead of crashing. Rust has no `null` and no exceptions. It has `Option` for \"maybe nothing\", `Result` for \"maybe failed\", and the `?` operator to pass failures upward without drowning in `match`.\n\nLearn them, read the damaged map, and finish your first season as a full member of the Crab Fleet.\n"
+  },
+  "concepts": [
+    {
+      "title": "Option<T> instead of null",
+      "body": "Rust has no `null`. A value that might be missing has the type `Option<T>`:\n\n```rust\nenum Option<T> {\n    Some(T),\n    None,\n}\n```\n\nThe compiler will not let you use an `Option<u32>` as a `u32`. You have to say what happens in the `None` case, so \"forgot to check for null\" cannot happen.\n\n```rust\nlet crew = [\"Ann\", \"Bo\"];\nlet third: Option<&&str> = crew.get(2); // None, not a crash\n```\n\n`Option<String>` and `Option<Box<T>>` take no extra space: `None` is stored as a null pointer internally, and you never see it.\n"
+    },
+    {
+      "title": "Result<T, E> and pattern matching",
+      "body": "An operation that can **fail** returns `Result<T, E>`: `Ok(value)` or `Err(error)`. Parsing is the classic example:\n\n```rust\nlet r: Result<u32, std::num::ParseIntError> = \"12\".parse::<u32>();\n```\n\nThree ways to look inside:\n\n```rust\nmatch r {\n    Ok(n) => println!(\"{n} crates\"),\n    Err(e) => println!(\"bad count: {e}\"),\n}\n\nif let Ok(n) = \"7\".parse::<u32>() {\n    println!(\"got {n}\"); // only care about one case\n}\n\nlet Some((name, qty)) = line.split_once(':') else {\n    return None; // let-else: bail out, keep going flat\n};\n```\n\n`let ... else` binds the pattern for the rest of the function. The `else` block must leave the function (`return`, `continue`, `break` or panic).\n"
+    },
+    {
+      "title": "Combinators: transform without matching",
+      "body": "Small `match`es often collapse into a method call:\n\n- `opt.map(|x| x * 2)` transforms the `Some` value. `None` stays `None`.\n- `opt.and_then(f)` chains a step that can itself fail (`f` returns an `Option`).\n- `opt.ok_or(err)` / `opt.ok_or_else(|| err)` turns `Option` into `Result`.\n- `res.ok()` turns `Result` into `Option` and throws the error away.\n- `res.map_err(f)` changes the error type.\n- `x.unwrap_or(default)`, `x.unwrap_or_default()` give a fallback value. These never panic.\n\n```rust\nlet depth = \"40\".parse::<u32>().unwrap_or(0);       // 40\nlet depth = \"deep\".parse::<u32>().unwrap_or_default(); // 0\n```\n"
+    },
+    {
+      "title": "The ? operator",
+      "body": "`?` means: \"if this is `Err` (or `None`), **return it from the current function right now**. Otherwise give me the value inside.\"\n\n```rust\nfn double(s: &str) -> Result<u32, ParseIntError> {\n    let n: u32 = s.parse()?; // early return on Err\n    Ok(n * 2)\n}\n```\n\nTwo rules the compiler enforces with **E0277**:\n\n1. The function must itself return `Result` (or `Option` for `?` on an `Option`). Using `?` in a plain `fn main()` that returns `()` is an error. `fn main() -> Result<(), E>` is allowed.\n2. The error must convert into the function's error type. `?` calls `From::from` on the error, so `ParseIntError` cannot silently become `String`. Use `.map_err(...)?` or implement `From`.\n"
+    },
+    {
+      "title": "unwrap, expect and panics",
+      "body": "`.unwrap()` takes the value out of `Some`/`Ok` and **panics** on `None`/`Err`. `.expect(\"msg\")` does the same with your message. A panic unwinds the thread, and from `main` that ends the program with exit code **101**.\n\nPanicking is right when a failure means **a bug in your program**, not bad input: tests, examples, and invariants you have just checked. For anything that comes from outside (user input, files, the network, a damaged map), return a `Result` and let the caller decide. Library code should almost never `unwrap`.\n"
+    },
+    {
+      "title": "Custom error enums with Display and From",
+      "body": "When a function can fail in several ways, give each way a name:\n\n```rust\n#[derive(Debug)]\nenum CargoError {\n    Empty,\n    BadCount(ParseIntError),\n}\n\nimpl fmt::Display for CargoError {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        match self {\n            CargoError::Empty => write!(f, \"empty line\"),\n            CargoError::BadCount(e) => write!(f, \"bad count: {e}\"),\n        }\n    }\n}\n\nimpl From<ParseIntError> for CargoError {\n    fn from(e: ParseIntError) -> Self {\n        CargoError::BadCount(e)\n    }\n}\n```\n\nWith that `From`, `let n: u32 = s.parse()?;` works inside a function returning `Result<_, CargoError>`: `?` converts the `ParseIntError` for you. `Display` is the human message, and `Debug` is for developers.\n"
+    }
+  ],
+  "visual": {
+    "title": "Option and Result in memory, and ? popping a frame",
+    "code": "fn parse(s: &str) -> Result<u32, ParseIntError> {\n    let n: u32 = s.parse()?;\n    Ok(n * 2)\n}\nfn main() {\n    let map: Option<String> = Some(String::from(\"X\"));\n    let lost: Option<String> = None;\n    let a = parse(\"21\");\n    let b = parse(\"x\");\n}",
+    "steps": [
+      {
+        "line": 6,
+        "note": "Some(String) holds a normal String: pointer, length, capacity. The buffer \"X\" lives on the heap.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "map",
+                "name": "map",
+                "value": "Some(ptr len=1)"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "hx",
+            "label": "\"X\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "map",
+            "to": "hx",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 7,
+        "note": "None allocates nothing. It is stored as a null pointer inside the same space, so Option<String> is no bigger than String.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "map",
+                "name": "map",
+                "value": "Some(ptr len=1)"
+              },
+              {
+                "id": "lost",
+                "name": "lost",
+                "value": "None"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "hx",
+            "label": "\"X\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "map",
+            "to": "hx",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 2,
+        "note": "parse(\"21\") pushes a frame. s.parse() returns Ok(21), and ? unwraps it into n.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "map",
+                "name": "map",
+                "value": "Some(ptr len=1)"
+              },
+              {
+                "id": "lost",
+                "name": "lost",
+                "value": "None"
+              }
+            ]
+          },
+          {
+            "frame": "parse",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "value": "&\"21\""
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "21"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "hx",
+            "label": "\"X\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "map",
+            "to": "hx",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 3,
+        "note": "The happy path reaches the end: parse returns Ok(42), its frame is popped, and a holds the Result.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "map",
+                "name": "map",
+                "value": "Some(ptr len=1)"
+              },
+              {
+                "id": "lost",
+                "name": "lost",
+                "value": "None"
+              },
+              {
+                "id": "a",
+                "name": "a",
+                "value": "Ok(42)"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "hx",
+            "label": "\"X\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "map",
+            "to": "hx",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 2,
+        "note": "parse(\"x\"): s.parse() returns Err(InvalidDigit). The ? sees the Err and does not bind n.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "map",
+                "name": "map",
+                "value": "Some(ptr len=1)"
+              },
+              {
+                "id": "lost",
+                "name": "lost",
+                "value": "None"
+              },
+              {
+                "id": "a",
+                "name": "a",
+                "value": "Ok(42)"
+              }
+            ]
+          },
+          {
+            "frame": "parse",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "value": "&\"x\""
+              },
+              {
+                "id": "tmp",
+                "name": "s.parse()",
+                "value": "Err(InvalidDigit)"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "hx",
+            "label": "\"X\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "map",
+            "to": "hx",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 9,
+        "note": "? returns early: the frame is popped right away, line 3 never runs, and b receives the Err.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "map",
+                "name": "map",
+                "value": "Some(ptr len=1)"
+              },
+              {
+                "id": "lost",
+                "name": "lost",
+                "value": "None"
+              },
+              {
+                "id": "a",
+                "name": "a",
+                "value": "Ok(42)"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "value": "Err(InvalidDigit)"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "hx",
+            "label": "\"X\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "map",
+            "to": "hx",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 10,
+        "note": "End of main: map drops its String and frees the buffer. lost, a and b own nothing on the heap.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "map",
+                "name": "map",
+                "state": "dropped"
+              },
+              {
+                "id": "lost",
+                "name": "lost",
+                "state": "dropped"
+              },
+              {
+                "id": "a",
+                "name": "a",
+                "state": "dropped"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "hx",
+            "label": "\"X\"",
+            "state": "freed"
+          }
+        ],
+        "arrows": []
+      }
+    ]
+  },
+  "challenges": [
+    {
+      "id": "l5-predict-unwrap",
+      "title": "Unwrapping the lost island",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The old quartermaster trusted every chart. One of these islands is not on any of them.",
+      "prompt": "Read the program. What happens when you compile and run it?",
+      "starter": "fn find_island(name: &str) -> Option<u32> {\n    if name == \"Tortuga\" {\n        Some(7)\n    } else {\n        None\n    }\n}\n\nfn main() {\n    let a = find_island(\"Tortuga\").unwrap();\n    println!(\"found at {a}\");\n    let b = find_island(\"Atlantis\").unwrap();\n    println!(\"found at {b}\");\n}\n",
+      "reference": "panics",
+      "choices": [
+        {
+          "id": "zero",
+          "label": "It prints `found at 7`, then `found at 0`"
+        },
+        {
+          "id": "panics",
+          "label": "It prints `found at 7`, then panics at runtime (exit code 101)"
+        },
+        {
+          "id": "E0308",
+          "label": "Compile error E0308: `find_island` might return `None`, which is not a `u32`"
+        },
+        {
+          "id": "skips",
+          "label": "It prints only `found at 7`: the second line is skipped because `b` is `None`"
+        }
+      ],
+      "hints": [
+        "What does `find_island(\"Atlantis\")` return?",
+        "`unwrap()` on `Some(v)` gives `v`. What can it possibly give on `None`?",
+        "The type checker is happy: `unwrap()` returns `u32`. The problem only shows up when the program runs and meets a `None`."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "panics",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l5-predict-combinators",
+      "title": "Reading smudged ink",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The navigator does all her chart reading with combinators and never writes a `match`. Can you follow her?",
+      "prompt": "What does this program print?",
+      "starter": "fn main() {\n    let found: Option<u32> = Some(4);\n    let lost: Option<u32> = None;\n    let x = found.map(|n| n * 10).unwrap_or(0);\n    let y = lost.map(|n| n * 10).unwrap_or(0);\n    let z = found.and_then(|n| if n > 5 { Some(n) } else { None });\n    println!(\"{x} {y} {z:?}\");\n    println!(\"{:?}\", lost.ok_or(\"no map\"));\n}\n",
+      "reference": "out-a",
+      "choices": [
+        {
+          "id": "out-a",
+          "label": "`40 0 None`, then `Err(\"no map\")`"
+        },
+        {
+          "id": "out-b",
+          "label": "`40 0 Some(4)`, then `Err(\"no map\")`"
+        },
+        {
+          "id": "out-c",
+          "label": "`40 0 None`, then `None`"
+        },
+        {
+          "id": "out-d",
+          "label": "`40 0 None`, then `Ok(\"no map\")`"
+        },
+        {
+          "id": "panics",
+          "label": "It panics: `lost.map(...)` is called on `None`"
+        }
+      ],
+      "hints": [
+        "`map` and `and_then` on `None` do nothing and return `None`. They never panic.",
+        "`and_then` keeps the result of the closure. Here the closure returns `None` unless the number is bigger than 5.",
+        "`ok_or(e)` turns `Some(v)` into `Ok(v)` and `None` into `Err(e)`."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-a",
+        "output": "40 0 None\nErr(\"no map\")\n"
+      }
+    },
+    {
+      "id": "l5-predict-question-main",
+      "title": "A question mark in main",
+      "kind": "predict",
+      "xp": 10,
+      "story": "A deckhand learned about `?` this morning and is now putting it everywhere.",
+      "prompt": "Read the program. What happens when you compile and run it?",
+      "starter": "fn main() {\n    let gold: u32 = \"40\".parse()?;\n    println!(\"{gold} doubloons\");\n}\n",
+      "reference": "E0277",
+      "choices": [
+        {
+          "id": "compiles",
+          "label": "It compiles and prints `40 doubloons`"
+        },
+        {
+          "id": "E0277",
+          "label": "Compile error E0277: `?` can only be used in a function that returns `Result` or `Option`"
+        },
+        {
+          "id": "E0308",
+          "label": "Compile error E0308: `parse` returns a `Result`, not a `u32`"
+        },
+        {
+          "id": "panics",
+          "label": "It compiles, but panics because `main` cannot return an error"
+        }
+      ],
+      "hints": [
+        "`?` may *return* from the current function. Which function is that, and what does it return?",
+        "`fn main()` with no return type returns `()`. Can `()` hold an `Err`?",
+        "rustc rejects this at compile time with E0277. The fix is `fn main() -> Result<(), std::num::ParseIntError>` plus `Ok(())` at the end, or handling the error with `match`."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "E0277",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l5-fix-depth",
+      "title": "Errors that don't fit",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The diver's depth reader returns `String` errors, but the parser speaks `ParseIntError`. *Rustc* the parrot refuses to translate.",
+      "prompt": "This program does not compile: the `?` in `parse_depth` cannot convert a `ParseIntError` into the function's `String` error type (E0277).\n\nFix it so it prints exactly:\n\n```text\ndive to 40\ndive to 7\ncannot dive: 200 fathoms is too deep\ncannot dive: bad depth \"deep\": invalid digit found in string\n```\n\nA bad number gives the error `bad depth \"<input>\": <parse error>`, where `<input>` is the original argument printed with `{:?}` and `<parse error>` is the `ParseIntError`'s `Display` text.\n\nRules: keep the signature `fn parse_depth(s: &str) -> Result<u32, String>` and keep using `?` for the parse. No `.unwrap()` or `.expect(`. `main` stays as it is.\n",
+      "starter": "fn parse_depth(s: &str) -> Result<u32, String> {\n    let depth: u32 = s.trim().parse()?;\n    if depth > 100 {\n        return Err(format!(\"{depth} fathoms is too deep\"));\n    }\n    Ok(depth)\n}\n\nfn main() {\n    for s in [\"40\", \" 7 \", \"200\", \"deep\"] {\n        match parse_depth(s) {\n            Ok(d) => println!(\"dive to {d}\"),\n            Err(e) => println!(\"cannot dive: {e}\"),\n        }\n    }\n}\n",
+      "reference": "fn parse_depth(s: &str) -> Result<u32, String> {\n    let depth: u32 = s\n        .trim()\n        .parse()\n        .map_err(|e| format!(\"bad depth {s:?}: {e}\"))?;\n    if depth > 100 {\n        return Err(format!(\"{depth} fathoms is too deep\"));\n    }\n    Ok(depth)\n}\n\nfn main() {\n    for s in [\"40\", \" 7 \", \"200\", \"deep\"] {\n        match parse_depth(s) {\n            Ok(d) => println!(\"dive to {d}\"),\n            Err(e) => println!(\"cannot dive: {e}\"),\n        }\n    }\n}\n",
+      "hints": [
+        "Read the E0277 message: `?` couldn't convert the error to `String`. Which two error types are involved?",
+        "`?` only converts errors through `From`, and there is no `From<ParseIntError> for String`. You can change the error yourself before the `?`.",
+        "`Result::map_err` transforms the `Err` value: `.parse().map_err(|e| format!(\"bad depth {s:?}: {e}\"))?`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "good, padded, too deep and bad depths",
+            "expected": "dive to 40\ndive to 7\ncannot dive: 200 fathoms is too deep\ncannot dive: bad depth \"deep\": invalid digit found in string\n"
+          }
+        ],
+        "require": [
+          {
+            "pattern": "\\?\\s*;",
+            "message": "Keep using ? to propagate the parse error."
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.unwrap\\(\\)",
+            "message": "No .unwrap(): a bad depth must become an Err, not a panic."
+          },
+          {
+            "pattern": "\\.expect\\(",
+            "message": "No .expect(): a bad depth must become an Err, not a panic."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l5-complete-manifest",
+      "title": "Cargo manifest helpers",
+      "kind": "complete",
+      "xp": 15,
+      "story": "Half the cargo manifest is legible. The purser needs three small helpers that never crash, whatever the ink says.",
+      "prompt": "Fill in the three `todo!()`s. None of them may panic.\n\n- `fn parse_entry(line: &str) -> Option<(&str, u32)>`: a line looks like `rum = 12`. Split at the first `=`, trim both sides, and parse the count as `u32`. Return `None` if there is no `=`, the trimmed name is empty, or the count doesn't parse.\n- `fn count_of(entries: &[(&str, u32)], name: &str) -> Result<u32, String>`: the count of the first entry named `name`, or `Err` with exactly `no crate named <name>`.\n- `fn count_or_zero(s: &str) -> u32`: the trimmed text parsed as `u32`, or `0` if it doesn't parse.\n\nGood tools for this: `let ... else`, `.ok()?`, `.find(...)`, `.map(...)`, `.ok_or_else(...)` and `.unwrap_or_default()`. Hidden tests call the three functions directly.\n",
+      "starter": "/// \"rum = 12\" -> Some((\"rum\", 12)); None if the line is damaged.\nfn parse_entry(line: &str) -> Option<(&str, u32)> {\n    todo!()\n}\n\n/// The count for `name`, or \"no crate named <name>\".\nfn count_of(entries: &[(&str, u32)], name: &str) -> Result<u32, String> {\n    todo!()\n}\n\n/// The count, or 0 if the ink is smudged.\nfn count_or_zero(s: &str) -> u32 {\n    todo!()\n}\n\nfn main() {\n    let lines = [\"rum = 12\", \"maps = 3\", \"parrots = many\"];\n    let entries: Vec<(&str, u32)> = lines.iter().filter_map(|l| parse_entry(l)).collect();\n    println!(\"{entries:?}\");\n    println!(\"{:?}\", count_of(&entries, \"maps\"));\n    println!(\"{}\", count_or_zero(\"lots\"));\n}\n",
+      "reference": "/// \"rum = 12\" -> Some((\"rum\", 12)); None if the line is damaged.\nfn parse_entry(line: &str) -> Option<(&str, u32)> {\n    let Some((name, count)) = line.split_once('=') else {\n        return None;\n    };\n    let name = name.trim();\n    if name.is_empty() {\n        return None;\n    }\n    let count = count.trim().parse().ok()?;\n    Some((name, count))\n}\n\n/// The count for `name`, or \"no crate named <name>\".\nfn count_of(entries: &[(&str, u32)], name: &str) -> Result<u32, String> {\n    entries\n        .iter()\n        .find(|(n, _)| *n == name)\n        .map(|&(_, count)| count)\n        .ok_or_else(|| format!(\"no crate named {name}\"))\n}\n\n/// The count, or 0 if the ink is smudged.\nfn count_or_zero(s: &str) -> u32 {\n    s.trim().parse().unwrap_or_default()\n}\n\nfn main() {\n    let lines = [\"rum = 12\", \"maps = 3\", \"parrots = many\"];\n    let entries: Vec<(&str, u32)> = lines.iter().filter_map(|l| parse_entry(l)).collect();\n    println!(\"{entries:?}\");\n    println!(\"{:?}\", count_of(&entries, \"maps\"));\n    println!(\"{}\", count_or_zero(\"lots\"));\n}\n",
+      "hints": [
+        "`str::split_once('=')` returns `Option<(&str, &str)>`. `\"12\".parse::<u32>()` returns a `Result`, and `.ok()` turns it into an `Option`.",
+        "In a function returning `Option`, `?` works on `Option` values too: `let count = text.parse().ok()?;`. For the split, `let Some((name, count)) = line.split_once('=') else { return None; };` keeps the code flat.",
+        "`count_of`: `entries.iter().find(|(n, _)| *n == name).map(|&(_, c)| c).ok_or_else(|| format!(\"no crate named {name}\"))`. `count_or_zero`: `s.trim().parse().unwrap_or_default()`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn parses_a_clean_entry() {\n        assert_eq!(parse_entry(\"rum = 12\"), Some((\"rum\", 12)));\n    }\n\n    #[test]\n    fn trims_both_sides() {\n        assert_eq!(parse_entry(\"  sea maps=3  \"), Some((\"sea maps\", 3)));\n    }\n\n    #[test]\n    fn missing_equals_is_none() {\n        assert_eq!(parse_entry(\"rum 12\"), None);\n    }\n\n    #[test]\n    fn bad_count_is_none() {\n        assert_eq!(parse_entry(\"parrots = many\"), None);\n        assert_eq!(parse_entry(\"rum = -1\"), None);\n        assert_eq!(parse_entry(\"rum =\"), None);\n    }\n\n    #[test]\n    fn empty_name_is_none() {\n        assert_eq!(parse_entry(\"  = 5\"), None);\n    }\n\n    #[test]\n    fn count_of_finds_first_match() {\n        let e = [(\"rum\", 1), (\"maps\", 3), (\"rum\", 9)];\n        assert_eq!(count_of(&e, \"rum\"), Ok(1));\n        assert_eq!(count_of(&e, \"maps\"), Ok(3));\n    }\n\n    #[test]\n    fn count_of_missing_names_the_crate() {\n        let e = [(\"rum\", 1)];\n        assert_eq!(count_of(&e, \"gold\"), Err(String::from(\"no crate named gold\")));\n        assert_eq!(count_of(&[], \"rum\"), Err(String::from(\"no crate named rum\")));\n    }\n\n    #[test]\n    fn count_or_zero_falls_back_to_zero() {\n        assert_eq!(count_or_zero(\" 42 \"), 42);\n        assert_eq!(count_or_zero(\"lots\"), 0);\n        assert_eq!(count_or_zero(\"\"), 0);\n    }\n}\n",
+        "forbid": [
+          {
+            "pattern": "\\.unwrap\\(\\)",
+            "message": "No .unwrap(): these helpers must never panic."
+          },
+          {
+            "pattern": "\\.expect\\(",
+            "message": "No .expect(): these helpers must never panic."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l5-write-cargo-error",
+      "title": "Name your errors",
+      "kind": "write",
+      "xp": 20,
+      "story": "The purser is tired of errors that just say *something went wrong*. Every damaged line deserves a proper name.",
+      "prompt": "Write a custom error type and two functions that use it. Use exactly these names:\n\n```rust\nuse std::fmt;\nuse std::num::ParseIntError;\n\n#[derive(Debug)]\nenum CargoError {\n    Empty,\n    MissingCount(String),\n    BadCount(ParseIntError),\n}\n```\n\n- `impl fmt::Display for CargoError` with these messages:\n  - `Empty`: `empty line`\n  - `MissingCount(line)`: `no count in \"<line>\"` (the line printed with `{:?}`)\n  - `BadCount(e)`: `bad count: <e>`\n- `impl From<ParseIntError> for CargoError`, producing `BadCount`.\n- `fn parse_line(line: &str) -> Result<(String, u32), CargoError>`: a line looks like `rum: 12`. Trim the line. If it is empty, return `Empty`. If it has no `:`, return `MissingCount` with the trimmed line. Otherwise the name is the trimmed text before the first `:` and the count is the trimmed text after it, parsed as `u32` with `?`.\n- `fn total(manifest: &str) -> Result<u32, CargoError>`: the sum of the counts of **every** line (`str::lines`), or the error of the first bad line.\n\nKeep a `fn main()`. Hidden tests call `parse_line`, `total`, `CargoError::from` and `to_string()`. After they pass, the tutor judges how idiomatic your error handling is.\n",
+      "starter": "use std::fmt;\nuse std::num::ParseIntError;\n\n// Define CargoError, implement Display and From<ParseIntError>,\n// then write parse_line and total.\n\nfn main() {}\n",
+      "reference": "use std::fmt;\nuse std::num::ParseIntError;\n\n#[derive(Debug)]\nenum CargoError {\n    Empty,\n    MissingCount(String),\n    BadCount(ParseIntError),\n}\n\nimpl fmt::Display for CargoError {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        match self {\n            CargoError::Empty => write!(f, \"empty line\"),\n            CargoError::MissingCount(line) => write!(f, \"no count in {line:?}\"),\n            CargoError::BadCount(e) => write!(f, \"bad count: {e}\"),\n        }\n    }\n}\n\nimpl From<ParseIntError> for CargoError {\n    fn from(e: ParseIntError) -> Self {\n        CargoError::BadCount(e)\n    }\n}\n\nfn parse_line(line: &str) -> Result<(String, u32), CargoError> {\n    let line = line.trim();\n    if line.is_empty() {\n        return Err(CargoError::Empty);\n    }\n    let Some((name, count)) = line.split_once(':') else {\n        return Err(CargoError::MissingCount(line.to_string()));\n    };\n    let count: u32 = count.trim().parse()?;\n    Ok((name.trim().to_string(), count))\n}\n\nfn total(manifest: &str) -> Result<u32, CargoError> {\n    let mut sum = 0;\n    for line in manifest.lines() {\n        let (_, count) = parse_line(line)?;\n        sum += count;\n    }\n    Ok(sum)\n}\n\nfn main() {\n    match parse_line(\"rum: 12\") {\n        Ok((name, count)) => println!(\"{count} x {name}\"),\n        Err(e) => println!(\"error: {e}\"),\n    }\n    match total(\"rum: 12\\nmaps: x\") {\n        Ok(sum) => println!(\"total {sum}\"),\n        Err(e) => println!(\"error: {e}\"),\n    }\n}\n",
+      "hints": [
+        "Start with the enum and `Display`: `match self { CargoError::Empty => write!(f, \"empty line\"), ... }`.",
+        "`impl From<ParseIntError> for CargoError { fn from(e: ParseIntError) -> Self { ... } }` is what lets `count.trim().parse()?` compile inside `parse_line`.",
+        "`parse_line`: trim, check `is_empty()`, then `let Some((name, count)) = line.split_once(':') else { return Err(CargoError::MissingCount(line.to_string())); };`, then `let count: u32 = count.trim().parse()?;`. `total`: loop over `manifest.lines()`, `let (_, c) = parse_line(line)?;` and add."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn parses_name_and_count() {\n        let (name, count) = parse_line(\"  sea maps : 12 \").unwrap();\n        assert_eq!(name, \"sea maps\");\n        assert_eq!(count, 12);\n    }\n\n    #[test]\n    fn blank_line_is_empty_error() {\n        assert!(matches!(parse_line(\"   \"), Err(CargoError::Empty)));\n    }\n\n    #[test]\n    fn missing_colon_keeps_the_trimmed_line() {\n        match parse_line(\"  rum 12 \") {\n            Err(CargoError::MissingCount(line)) => assert_eq!(line, \"rum 12\"),\n            other => panic!(\"expected MissingCount, got {other:?}\"),\n        }\n    }\n\n    #[test]\n    fn bad_count_wraps_the_parse_error() {\n        assert!(matches!(parse_line(\"rum: lots\"), Err(CargoError::BadCount(_))));\n        assert!(matches!(parse_line(\"rum: -3\"), Err(CargoError::BadCount(_))));\n    }\n\n    #[test]\n    fn display_messages_are_exact() {\n        assert_eq!(CargoError::Empty.to_string(), \"empty line\");\n        assert_eq!(parse_line(\"rum 12\").unwrap_err().to_string(), \"no count in \\\"rum 12\\\"\");\n        assert_eq!(parse_line(\"rum: lots\").unwrap_err().to_string(), \"bad count: invalid digit found in string\");\n    }\n\n    #[test]\n    fn from_parse_int_error_gives_bad_count() {\n        let e = \"x\".parse::<u32>().unwrap_err();\n        assert!(matches!(CargoError::from(e), CargoError::BadCount(_)));\n    }\n\n    #[test]\n    fn total_sums_every_line() {\n        assert_eq!(total(\"rum: 12\\nmaps: 3\\ngold:0\").unwrap(), 15);\n        assert_eq!(total(\"\").unwrap(), 0);\n    }\n\n    #[test]\n    fn total_stops_at_first_bad_line() {\n        let err = total(\"rum: 1\\nmaps 3\\ngold: x\").unwrap_err();\n        assert_eq!(err.to_string(), \"no count in \\\"maps 3\\\"\");\n        assert!(matches!(total(\"rum: 1\\n\\ngold: 2\"), Err(CargoError::Empty)));\n    }\n}\n",
+        "require": [
+          {
+            "pattern": "impl\\s+From\\s*<\\s*(std::num::)?ParseIntError\\s*>\\s+for\\s+CargoError",
+            "message": "Implement From<ParseIntError> for CargoError so ? can convert the parse error."
+          },
+          {
+            "pattern": "\\?",
+            "message": "Propagate errors with ? instead of matching every Result by hand."
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.unwrap\\(\\)",
+            "message": "No .unwrap() in parse_line or total: return the error instead."
+          },
+          {
+            "pattern": "\\.expect\\(",
+            "message": "No .expect() in parse_line or total: return the error instead."
+          }
+        ]
+      },
+      "judge": "agent",
+      "rubric": "Idiomatic Rust error handling. Required: no unwrap/expect/panic! in parse_line or total (library code returns errors, it does not crash); the parse error reaches the caller through ? using the From<ParseIntError> impl, not via a hand-written match on the parse result or map_err to a different variant; total uses ? inside the loop (or an iterator collecting into Result, e.g. map(parse_line).map(|r| r.map(|(_, c)| c)).sum::<Result<u32, _>>()), not nested matches. Display uses write! with a match on self and produces the exact messages; it is not built by matching on Debug output. Errors carry meaningful data (the offending trimmed line, the original ParseIntError), never a bare String or a lossy conversion to text. Prefer let-else or if-let/split_once over manual find+slice index arithmetic. Deduct points for: cloning or allocating more than needed (to_string on the name is fine since the tuple owns a String), swallowing errors with ok()/unwrap_or, deeply nested match pyramids, or redundant checks. Readability matters more than cleverness.\n"
+    },
+    {
+      "id": "l5-boss-treasure-map",
+      "title": "Boss: The Damaged Treasure Map",
+      "kind": "boss",
+      "xp": 50,
+      "story": "The captain hands you the soaked map and the old quartermaster's reader. It works on a perfect map and sinks on the first smudge. Make it survive the storm, and the treasure is the fleet's.",
+      "prompt": "The program reads a treasure map from stdin and follows it. Each line is `DIR DISTANCE`: a direction `N`, `S`, `E` or `W`, then a distance (`u32`), separated by whitespace. Start at `(0, 0)`. `E` increases x, `W` decreases x, `N` increases y and `S` decreases y. Lines are trimmed and blank lines are skipped.\n\nToday it **panics** on any damaged line. Rewrite it so it never panics. For a good map such as\n\n```text\nN 3\nE 10\n\nS 1\nW 4\n```\n\nit prints exactly:\n\n```text\n4 steps followed\ntreasure at (6, 2)\n```\n\nAt the **first** damaged line it prints exactly one line, nothing else, and still exits normally:\n\n```text\nmap damaged at line <n>: <error>\n```\n\n`<n>` is the 1-based line number in the input, with blank lines counted. `<error>` is one of these, checked in this order:\n\n- the line does not have exactly two whitespace-separated parts: `expected DIR DISTANCE, got \"<line>\"` (the trimmed line printed with `{:?}`)\n- unknown direction: `unknown direction \"<dir>\"` (printed with `{:?}`)\n- the distance doesn't parse as `u32`: `bad distance: <ParseIntError message>`\n\nRules:\n- Define an error enum that implements `Display` and `From<ParseIntError>`, and parse the distance with `.parse()?` (or `.parse::<u32>()?`) so `?` does the conversion.\n- No `.unwrap()`, `.expect(` or `panic!` anywhere. Reading stdin can fail too: `main` may return `std::io::Result<()>`.\n\nHidden cases include an empty map, unknown directions, negative and huge distances, and lines with too many or too few parts.\n",
+      "starter": "use std::io::{self, Read};\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    let (mut x, mut y) = (0i64, 0i64);\n    let mut steps = 0;\n    for line in text.lines() {\n        let line = line.trim();\n        if line.is_empty() {\n            continue;\n        }\n        let (dir, dist) = line.split_once(' ').unwrap();\n        let dist: i64 = dist.parse().unwrap();\n        match dir {\n            \"N\" => y += dist,\n            \"S\" => y -= dist,\n            \"E\" => x += dist,\n            \"W\" => x -= dist,\n            _ => panic!(\"unknown direction\"),\n        }\n        steps += 1;\n    }\n    println!(\"{steps} steps followed\");\n    println!(\"treasure at ({x}, {y})\");\n}\n",
+      "reference": "use std::fmt;\nuse std::io::{self, Read};\nuse std::num::ParseIntError;\n\n#[derive(Debug)]\nenum MapError {\n    Shape(String),\n    UnknownDirection(String),\n    BadDistance(ParseIntError),\n}\n\nimpl fmt::Display for MapError {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        match self {\n            MapError::Shape(line) => write!(f, \"expected DIR DISTANCE, got {line:?}\"),\n            MapError::UnknownDirection(dir) => write!(f, \"unknown direction {dir:?}\"),\n            MapError::BadDistance(e) => write!(f, \"bad distance: {e}\"),\n        }\n    }\n}\n\nimpl From<ParseIntError> for MapError {\n    fn from(e: ParseIntError) -> Self {\n        MapError::BadDistance(e)\n    }\n}\n\n/// One trimmed, non-blank line: how far it moves east (x) and north (y).\nfn parse_step(line: &str) -> Result<(i64, i64), MapError> {\n    let parts: Vec<&str> = line.split_whitespace().collect();\n    let [dir, dist] = parts[..] else {\n        return Err(MapError::Shape(line.to_string()));\n    };\n    let (dx, dy) = match dir {\n        \"N\" => (0, 1),\n        \"S\" => (0, -1),\n        \"E\" => (1, 0),\n        \"W\" => (-1, 0),\n        _ => return Err(MapError::UnknownDirection(dir.to_string())),\n    };\n    let dist = i64::from(dist.parse::<u32>()?);\n    Ok((dx * dist, dy * dist))\n}\n\n/// Follows the whole map: (steps, x, y), or the 1-based line number and its error.\nfn follow(text: &str) -> Result<(usize, i64, i64), (usize, MapError)> {\n    let (mut steps, mut x, mut y) = (0, 0, 0);\n    for (i, line) in text.lines().enumerate() {\n        let line = line.trim();\n        if line.is_empty() {\n            continue;\n        }\n        let (dx, dy) = parse_step(line).map_err(|e| (i + 1, e))?;\n        x += dx;\n        y += dy;\n        steps += 1;\n    }\n    Ok((steps, x, y))\n}\n\nfn main() -> io::Result<()> {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text)?;\n    match follow(&text) {\n        Ok((steps, x, y)) => {\n            println!(\"{steps} steps followed\");\n            println!(\"treasure at ({x}, {y})\");\n        }\n        Err((line, e)) => println!(\"map damaged at line {line}: {e}\"),\n    }\n    Ok(())\n}\n",
+      "hints": [
+        "Split the work: a function that parses **one** line into a step and returns `Result<_, MapError>`, and a loop that adds the steps up and remembers the line number.",
+        "Your enum needs three variants: wrong shape (keep the line), unknown direction (keep the direction), bad distance (keep the `ParseIntError`). With `impl From<ParseIntError> for MapError`, `dist.parse::<u32>()?` converts automatically.",
+        "Collect `line.split_whitespace()` into a `Vec<&str>` and destructure with `let [dir, dist] = parts[..] else { return Err(...) };`. Check the direction with a `match` **before** parsing the distance.",
+        "In the loop, attach the line number with `parse_step(line).map_err(|e| (i + 1, e))?` inside a function returning `Result<(usize, i64, i64), (usize, MapError)>`. Make `main` return `io::Result<()>` so `read_to_string(&mut text)?` replaces the `unwrap()`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "good map with a blank line",
+            "stdin": "N 3\nE 10\n\nS 1\nW 4\n",
+            "expected": "4 steps followed\ntreasure at (6, 2)\n"
+          },
+          {
+            "name": "empty map",
+            "stdin": "",
+            "expected": "0 steps followed\ntreasure at (0, 0)\n"
+          },
+          {
+            "name": "smudged distance",
+            "stdin": "N 3\nE x\n",
+            "expected": "map damaged at line 2: bad distance: invalid digit found in string\n"
+          },
+          {
+            "name": "unknown direction after a blank line",
+            "stdin": "N 1\n\nQ 5\n",
+            "expected": "map damaged at line 3: unknown direction \"Q\"\n"
+          },
+          {
+            "name": "missing distance",
+            "stdin": "N 3\n  E  \n",
+            "expected": "map damaged at line 2: expected DIR DISTANCE, got \"E\"\n"
+          },
+          {
+            "name": "too many parts",
+            "stdin": "N 3 4\n",
+            "expected": "map damaged at line 1: expected DIR DISTANCE, got \"N 3 4\"\n"
+          },
+          {
+            "name": "negative distance and padding",
+            "stdin": "  W 2  \nS -3\n",
+            "expected": "map damaged at line 2: bad distance: invalid digit found in string\n"
+          },
+          {
+            "name": "huge distance",
+            "stdin": "E 99999999999\n",
+            "expected": "map damaged at line 1: bad distance: number too large to fit in target type\n"
+          },
+          {
+            "name": "first error wins, direction before distance",
+            "stdin": "Q x\nE y\n",
+            "expected": "map damaged at line 1: unknown direction \"Q\"\n"
+          },
+          {
+            "name": "tabs and big totals",
+            "stdin": "W\t4000000000\nW 4000000000\nS 7\n",
+            "expected": "3 steps followed\ntreasure at (-8000000000, -7)\n"
+          }
+        ],
+        "require": [
+          {
+            "pattern": "\\.parse(::<\\s*u32\\s*>)?\\(\\)\\?",
+            "message": "Parse the distance with .parse()? so the From<ParseIntError> conversion does the work."
+          },
+          {
+            "pattern": "impl\\s+From\\s*<\\s*(std::num::)?ParseIntError\\s*>\\s+for",
+            "message": "Implement From<ParseIntError> for your error enum."
+          },
+          {
+            "pattern": "impl\\s+(std::)?(fmt::)?Display\\s+for",
+            "message": "Implement Display for your error enum."
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.unwrap\\(\\)",
+            "message": "No .unwrap(): a damaged map must produce an error message, not a panic."
+          },
+          {
+            "pattern": "\\.expect\\(",
+            "message": "No .expect(): a damaged map must produce an error message, not a panic."
+          },
+          {
+            "pattern": "panic!",
+            "message": "No panic!: report the damaged line instead."
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "l5-card-option",
+      "front": "How does Rust represent \"maybe there is no value\" without `null`?",
+      "back": "With `Option<T>`: `Some(value)` or `None`. The compiler won't let you use an `Option<T>` as a `T`, so you must handle `None`. `Option<String>` and `Option<Box<T>>` are no bigger than the pointer itself: `None` uses the null niche."
+    },
+    {
+      "id": "l5-card-unwrap",
+      "front": "What does `.unwrap()` do on `None` or `Err`, and when is that acceptable?",
+      "back": "It **panics**, and from `main` the program exits with code **101**. It's acceptable when failure would be a bug (tests, examples, invariants you just checked), not for input from outside. `.expect(\"why\")` is the same, with a better message.",
+      "unlockAfter": "l5-predict-unwrap"
+    },
+    {
+      "id": "l5-card-combinators",
+      "front": "`Some(4).and_then(|n| if n > 5 { Some(n) } else { None })` and `None::<u32>.ok_or(\"no map\")` evaluate to?",
+      "back": "`None` and `Err(\"no map\")`. `and_then` keeps whatever the closure returns. `ok_or(e)` maps `Some(v)` to `Ok(v)` and `None` to `Err(e)`. Neither ever panics.",
+      "unlockAfter": "l5-predict-combinators"
+    },
+    {
+      "id": "l5-card-q-main",
+      "front": "Why does `let n: u32 = \"4\".parse()?;` fail to compile inside `fn main()`?",
+      "back": "**E0277**: `?` may return early, so the enclosing function must return `Result` (or `Option`). Plain `main` returns `()`. Use `fn main() -> Result<(), ParseIntError>` and end with `Ok(())`, or handle the error with `match`.",
+      "unlockAfter": "l5-predict-question-main"
+    },
+    {
+      "id": "l5-card-q-convert",
+      "front": "A function returns `Result<u32, String>` and does `s.parse::<u32>()?`. Why E0277, and what are two fixes?",
+      "back": "`?` converts the error with `From::from`, and there is no `From<ParseIntError> for String`. Fix 1: `.map_err(|e| format!(\"bad: {e}\"))?`. Fix 2: use your own error type with `impl From<ParseIntError> for MyError`.",
+      "unlockAfter": "l5-fix-depth"
+    },
+    {
+      "id": "l5-card-let-else",
+      "front": "What does `let Some((a, b)) = s.split_once('=') else { return None; };` do?",
+      "back": "**let-else**: if the pattern matches, `a` and `b` are bound for the rest of the function. Otherwise the `else` block runs, and it must diverge (`return`, `continue`, `break`, panic). It keeps code flat instead of nesting a `match`.",
+      "unlockAfter": "l5-complete-manifest"
+    },
+    {
+      "id": "l5-card-custom-error",
+      "front": "What do you implement so `?` turns a `ParseIntError` into your `CargoError` with a readable message?",
+      "back": "`impl From<ParseIntError> for CargoError` (used by `?`) and `impl fmt::Display for CargoError` (the human message, via `write!` in a `match self`). Usually also `#[derive(Debug)]`.",
+      "unlockAfter": "l5-write-cargo-error"
+    }
+  ]
+}

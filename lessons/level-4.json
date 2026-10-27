@@ -1,0 +1,677 @@
+{
+  "id": "traits-generics",
+  "order": 4,
+  "title": "Traits & Generics",
+  "summary": "Give different types shared behaviour with traits, write one function for many types with generics and bounds, and choose between static and dynamic dispatch.",
+  "quest": {
+    "title": "The Shipwrights' Guild",
+    "story": "The Crab Fleet has grown. There are nimble sloops, lumbering galleons, a leaky raft that nobody admits to owning, and every one of them was built by a different shipwright with a different idea of how a ship should report its speed.\n\nThe admiral wants **one** set of signal flags that every ship understands: \"what's your name?\", \"how fast can you sail?\", \"report!\". Each ship answers in its own way, but the questions are always the same.\n\nIn Rust, that shared set of questions is a **trait**. Functions that work for *any* ship that knows the signals are **generic**. And when the admiral lines up a mixed fleet in one row, each ship carries a little card telling the fleet how to talk to it: a **vtable**.\n\n*Rustc* the parrot has opinions about all of this. It will squawk \"E0369!\" when you ask a mystery type to add, and \"E0277!\" when you forget to say which signals it must know. Learn the guild's rules, and the admiral will hand you the fleet review.\n"
+  },
+  "concepts": [
+    {
+      "title": "Traits: shared behaviour",
+      "body": "A **trait** names a set of methods that many types can provide. Each type opts in with an `impl` block:\n\n```rust\ntrait Ship {\n    fn name(&self) -> &str;          // required: every ship must say this\n    fn hail(&self) -> String {       // default: free for every implementor\n        format!(\"Ahoy from {}!\", self.name())\n    }\n}\n\nstruct Sloop { name: String }\n\nimpl Ship for Sloop {\n    fn name(&self) -> &str { &self.name }\n    // hail() is inherited from the default\n}\n```\n\nA **default method** may call the required methods. An implementor can **override** it by writing its own version. Put shared logic in the trait once instead of copying it into every `impl`.\n"
+    },
+    {
+      "title": "Generics need bounds",
+      "body": "A generic function is written once and works for many types. But inside the body, `T` is a mystery: Rust only lets you do what the **bounds** promise.\n\n```rust\nfn total<T>(a: T, b: T) -> T {\n    a + b // error[E0369]: cannot add `T` to `T`\n}\n```\n\nThe compiler checks the *definition*, not each call site. Saying `total(40, 2)` doesn't help. The typical squawks:\n\n- **E0369**: binary operator (`+`, `>`, `==`) used on a `T` without `Add`/`PartialOrd`/`PartialEq`.\n- **E0599**: method not found for `T`, e.g. `value.to_string()` without `Display`.\n- **E0277**: trait bound not satisfied, e.g. `println!(\"{value}\")` without `Display`, or calling a generic function with a type that lacks the trait.\n\nThe fix is a promise in the signature. Three equivalent spellings:\n\n```rust\nfn largest<T: PartialOrd>(items: &[T]) -> &T { /* ... */ }\nfn banner<T>(value: T) -> String where T: Display { /* ... */ }\nfn announce(value: impl Display) { /* ... */ }\n```\n\nUse a `where` clause when the bounds get long. Use `impl Trait` for a simple parameter you don't need to name.\n"
+    },
+    {
+      "title": "impl Trait in return position",
+      "body": "`-> impl Iterator<Item = u32>` means \"I return **one** concrete type that implements this trait, and I'm not telling you which\". It is still static: the compiler knows the real type.\n\nThat's also its limit. A function cannot return a `Sloop` in one branch and a `Galleon` in another as `impl Ship`, because those are two different types (error **E0308**). For \"one of several types, chosen at runtime\" you need a trait object: `Box<dyn Ship>`.\n"
+    },
+    {
+      "title": "Std traits every type wants",
+      "body": "Implement these and your type plugs into the whole standard library:\n\n- **`Display`**: `fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result`, usually `write!(f, \"...\")`. Gives you `{}` in `println!` and `.to_string()` for free.\n- **`PartialOrd` / `Ord`**: comparison. Implement `Ord::cmp` and let `partial_cmp` return `Some(self.cmp(other))`. Then `.sort()`, `.max()` and `<` work. Chain keys with `Ordering::then_with`.\n- **`Default`**: `T::default()`, a sensible empty value.\n- **`From<X>`**: a conversion from `X`. Implementing `From` gives you `Into` for free: `let c: Cargo = (\"rum\", 40).into();`.\n- **`Iterator`**: set `type Item` and write only `next()`. You get `map`, `filter`, `take`, `sum`, `collect` and dozens more as **default methods**.\n\nMany of these can be derived: `#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]`. Write them by hand when the derived behaviour isn't what you want, e.g. ordering by weight instead of by the first field.\n"
+    },
+    {
+      "title": "Trait objects: dyn Trait",
+      "body": "A `Vec<T>` holds one type. A mixed fleet needs **trait objects**:\n\n```rust\nlet fleet: Vec<Box<dyn Ship>> = vec![\n    Box::new(Sloop { name: \"Swift\".into() }),\n    Box::new(Galleon { name: \"Goldtooth\".into() }),\n];\nfor ship in &fleet {\n    println!(\"{}\", ship.hail()); // which hail()? decided at runtime\n}\n```\n\nA `Box<dyn Ship>` (or `&dyn Ship`) is a **fat pointer**: two words. One points at the data, and the other points at a **vtable**, a static table holding the type's size, its drop function and one function pointer per trait method. Calling `ship.hail()` looks up the slot in the vtable and jumps there.\n"
+    },
+    {
+      "title": "Static vs dynamic dispatch",
+      "body": "- **Generics (`T: Ship`, `impl Ship`)**: the compiler stamps out a copy of the function for every concrete type it is used with (**monomorphization**). Calls are direct and can be inlined. The cost is more machine code, and a `Vec<T>` still holds only one type.\n- **Trait objects (`&dyn Ship`, `Box<dyn Ship>`)**: one copy of the code, and calls go through the vtable. You can mix types in one collection and choose the type at runtime. The cost is a pointer indirection, no inlining, and usually a heap allocation for `Box`.\n\nRule of thumb: reach for generics by default. Use `dyn` when you need a heterogeneous collection, or a type picked at runtime (parsing input, plugins).\n"
+    }
+  ],
+  "visual": {
+    "title": "Generic call vs Box<dyn Ship>",
+    "code": "trait Ship { fn speed(&self) -> u32; }\nstruct Sloop { knots: u32 }\nimpl Ship for Sloop { fn speed(&self) -> u32 { self.knots } }\nfn fast<T: Ship>(t: &T) -> u32 { t.speed() }\n\nfn main() {\n    let s = Sloop { knots: 12 };\n    let n = fast(&s);\n    let b: Box<dyn Ship> = Box::new(s);\n    let k = b.speed();\n}",
+    "steps": [
+      {
+        "line": 7,
+        "note": "s is a plain Sloop on the stack: just one u32, no heap and no vtable.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "value": "Sloop{knots: 12}"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 8,
+        "note": "fast(&s) is generic. The compiler stamped out fast::<Sloop>, so t.speed() is a direct call to Sloop::speed with no lookup (static dispatch).",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "value": "Sloop{knots: 12}",
+                "state": "frozen"
+              }
+            ]
+          },
+          {
+            "frame": "fast::<Sloop>",
+            "vars": [
+              {
+                "id": "t",
+                "name": "t",
+                "value": "&Sloop"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": [
+          {
+            "from": "t",
+            "to": "s",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 8,
+        "note": "fast returns 12 and its frame is popped. t was a thin pointer: one word, just an address.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "value": "Sloop{knots: 12}"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "12"
+              }
+            ]
+          }
+        ],
+        "heap": [],
+        "arrows": []
+      },
+      {
+        "line": 9,
+        "note": "Box::new(s) moves the Sloop to the heap. b is a fat pointer: a data pointer to the Sloop and a vtable pointer to Sloop's table for Ship.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "state": "moved"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "12"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "value": "data | vtable"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "Sloop { knots: 12 }"
+          },
+          {
+            "id": "vt",
+            "label": "vtable: Ship"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "b",
+            "to": "h",
+            "kind": "own"
+          },
+          {
+            "from": "b",
+            "to": "vt",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 9,
+        "note": "The vtable is static data built by the compiler: Sloop's size, alignment, drop function, and a slot speed pointing to Sloop::speed. b only borrows it.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "state": "moved"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "12"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "value": "data | vtable"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "Sloop { knots: 12 }"
+          },
+          {
+            "id": "vt",
+            "label": "vtable: Ship"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "b",
+            "to": "h",
+            "kind": "own"
+          },
+          {
+            "from": "b",
+            "to": "vt",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 10,
+        "note": "b.speed() reads the speed slot from the vtable and calls it with the data pointer as self. That's dynamic dispatch.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "state": "moved"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "12"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "value": "data | vtable",
+                "state": "frozen"
+              }
+            ]
+          },
+          {
+            "frame": "Sloop::speed",
+            "vars": [
+              {
+                "id": "self",
+                "name": "self",
+                "value": "&Sloop"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "Sloop { knots: 12 }"
+          },
+          {
+            "id": "vt",
+            "label": "vtable: Ship"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "b",
+            "to": "h",
+            "kind": "own"
+          },
+          {
+            "from": "b",
+            "to": "vt",
+            "kind": "borrow"
+          },
+          {
+            "from": "self",
+            "to": "h",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 10,
+        "note": "k gets 12, the same answer as the generic call, reached through one extra pointer hop.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "state": "moved"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "value": "12"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "value": "data | vtable"
+              },
+              {
+                "id": "k",
+                "name": "k",
+                "value": "12"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "Sloop { knots: 12 }"
+          },
+          {
+            "id": "vt",
+            "label": "vtable: Ship"
+          }
+        ],
+        "arrows": [
+          {
+            "from": "b",
+            "to": "h",
+            "kind": "own"
+          },
+          {
+            "from": "b",
+            "to": "vt",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 11,
+        "note": "End of main: dropping b calls the drop function from the vtable and frees the Sloop. The vtable is static and lives for the whole program.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "s",
+                "name": "s",
+                "state": "dropped"
+              },
+              {
+                "id": "n",
+                "name": "n",
+                "state": "dropped"
+              },
+              {
+                "id": "b",
+                "name": "b",
+                "state": "dropped"
+              },
+              {
+                "id": "k",
+                "name": "k",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h",
+            "label": "Sloop { knots: 12 }",
+            "state": "freed"
+          },
+          {
+            "id": "vt",
+            "label": "vtable: Ship"
+          }
+        ],
+        "arrows": []
+      }
+    ]
+  },
+  "challenges": [
+    {
+      "id": "l4-predict-add",
+      "title": "Adding mystery cargo",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The purser wrote one function to add up any two piles of loot. He swears it works because he only ever calls it with numbers.",
+      "prompt": "Read the program. What happens when you compile and run it?",
+      "starter": "fn total<T>(a: T, b: T) -> T {\n    a + b\n}\n\nfn main() {\n    println!(\"{}\", total(40, 2));\n}\n",
+      "reference": "E0369",
+      "choices": [
+        {
+          "id": "prints-42",
+          "label": "It prints `42`: the compiler sees that `T` is `i32` at the call"
+        },
+        {
+          "id": "E0369",
+          "label": "Compile error E0369: cannot add `T` to `T`"
+        },
+        {
+          "id": "E0382",
+          "label": "Compile error E0382: `a` is moved by `+`"
+        },
+        {
+          "id": "panics",
+          "label": "It compiles but panics at runtime: `T` might not support `+`"
+        }
+      ],
+      "hints": [
+        "When rustc checks the body of `total`, does it know anything about `T`?",
+        "Generic bodies are checked once, for *every possible* `T`, not separately per call site.",
+        "Nothing promises that `T` supports `+`. That's error E0369 (binary operation cannot be applied). The fix would be a bound like `T: std::ops::Add<Output = T>`."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "E0369",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l4-predict-default",
+      "title": "Who answers the hail?",
+      "kind": "predict",
+      "xp": 10,
+      "story": "Two ships, one signal. The sloop uses the guild's standard greeting. The galleon's captain wrote his own.",
+      "prompt": "What does this program print?",
+      "starter": "trait Ship {\n    fn name(&self) -> &str;\n    fn hail(&self) -> String {\n        format!(\"Ahoy from the {}!\", self.name())\n    }\n}\nstruct Sloop;\nstruct Galleon;\nimpl Ship for Sloop {\n    fn name(&self) -> &str {\n        \"Sloop\"\n    }\n}\nimpl Ship for Galleon {\n    fn name(&self) -> &str {\n        \"Galleon\"\n    }\n    fn hail(&self) -> String {\n        String::from(\"Pay the toll!\")\n    }\n}\nfn main() {\n    let fleet: [&dyn Ship; 2] = [&Sloop, &Galleon];\n    for ship in fleet {\n        println!(\"{}\", ship.hail());\n    }\n}\n",
+      "reference": "out-override",
+      "choices": [
+        {
+          "id": "out-override",
+          "label": "`Ahoy from the Sloop!` then `Pay the toll!`"
+        },
+        {
+          "id": "out-default",
+          "label": "`Ahoy from the Sloop!` then `Ahoy from the Galleon!`"
+        },
+        {
+          "id": "out-ship",
+          "label": "`Ahoy from the Ship!` twice: a `&dyn Ship` only knows the trait's version"
+        },
+        {
+          "id": "E0038",
+          "label": "Compile error: traits with default methods can't be used as `dyn Ship`"
+        }
+      ],
+      "hints": [
+        "Which types provide their own `hail`, and which rely on the default?",
+        "A default method is used only when the `impl` doesn't write its own. Calling through `&dyn Ship` still finds each type's real method via the vtable.",
+        "The sloop uses the default, which calls `self.name()` and gets `Sloop`. The galleon overrides `hail` entirely."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "out-override",
+        "output": "Ahoy from the Sloop!\nPay the toll!\n"
+      }
+    },
+    {
+      "id": "l4-fix-bounds",
+      "title": "Promises in the signature",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The signal officer wrote three handy generic helpers. *Rustc* rejects all three, and the officer insists the bodies are perfect. They are. The signatures promise nothing.",
+      "prompt": "This program does not compile: each generic function uses something its `T` never promised. Add the missing **trait bounds** so it compiles and prints exactly:\n\n```text\nmost cannons: 9\nlast by name: sloop\n** SLOOP **\n** 7 **\n```\n\nRules:\n- Do not change any function **body** or `main`. Only change the signatures.\n- All three functions stay generic, and `largest` still returns `&T`.\n- Practise all three spellings: write the bound of `banner` in a **`where` clause**, and turn `announce` into an **`impl Trait`** parameter. An inline `T: Trait` fits `largest`.\n",
+      "starter": "use std::fmt::Display;\n\nfn largest<T>(items: &[T]) -> &T {\n    let mut best = &items[0];\n    for item in items {\n        if item > best {\n            best = item;\n        }\n    }\n    best\n}\n\nfn banner<T>(value: T) -> String {\n    format!(\"** {} **\", value.to_string().to_uppercase())\n}\n\nfn announce<T>(label: &str, value: T) {\n    println!(\"{label}: {value}\");\n}\n\nfn main() {\n    let cannons = [3, 9, 4];\n    let ships = [\"brig\", \"sloop\", \"galleon\"];\n    announce(\"most cannons\", largest(&cannons));\n    announce(\"last by name\", largest(&ships));\n    println!(\"{}\", banner(largest(&ships)));\n    println!(\"{}\", banner(7));\n}\n",
+      "reference": "use std::fmt::Display;\n\nfn largest<T: PartialOrd>(items: &[T]) -> &T {\n    let mut best = &items[0];\n    for item in items {\n        if item > best {\n            best = item;\n        }\n    }\n    best\n}\n\nfn banner<T>(value: T) -> String\nwhere\n    T: Display,\n{\n    format!(\"** {} **\", value.to_string().to_uppercase())\n}\n\nfn announce(label: &str, value: impl Display) {\n    println!(\"{label}: {value}\");\n}\n\nfn main() {\n    let cannons = [3, 9, 4];\n    let ships = [\"brig\", \"sloop\", \"galleon\"];\n    announce(\"most cannons\", largest(&cannons));\n    announce(\"last by name\", largest(&ships));\n    println!(\"{}\", banner(largest(&ships)));\n    println!(\"{}\", banner(7));\n}\n",
+      "hints": [
+        "Read each error code: E0369 (an operator on `T`), E0599 (a method on `T`) and E0277 (formatting `T`). Each one names the trait it wanted.",
+        "Comparing with `>` needs `PartialOrd`. Both `.to_string()` and `{}` formatting come from `Display`.",
+        "`fn largest<T: PartialOrd>(...)`, `fn banner<T>(value: T) -> String where T: Display { ... }` and `fn announce(label: &str, value: impl Display)`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "prints the signals",
+            "expected": "most cannons: 9\nlast by name: sloop\n** SLOOP **\n** 7 **\n"
+          }
+        ],
+        "require": [
+          {
+            "pattern": "fn\\s+largest\\s*<",
+            "message": "largest must stay generic: fn largest<T: ...>."
+          },
+          {
+            "pattern": "fn\\s+banner\\s*<",
+            "message": "banner must stay generic: fn banner<T>(value: T) -> String where ..."
+          },
+          {
+            "pattern": "\\bwhere\\b",
+            "message": "Write the bound of banner in a where clause."
+          },
+          {
+            "pattern": "value\\s*:\\s*impl\\s+[\\w:]*Display",
+            "message": "announce should take value: impl Display."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l4-complete-cargo",
+      "title": "Cargo that knows the std signals",
+      "kind": "complete",
+      "xp": 15,
+      "story": "The quartermaster wants crates that print themselves, sort themselves by weight, and can be built from a quick `(name, weight)` note scribbled on the dock.",
+      "prompt": "Fill in the four `todo!()`s for `struct Cargo { name: String, weight: u32 }`:\n\n- `Display`: formats as `rum (40 kg)`, i.e. `{name} ({weight} kg)`.\n- `Default`: a crate named `ballast` with weight `0`.\n- `From<(&str, u32)>`: builds a `Cargo` from a `(name, weight)` pair. Then `.into()` works for free.\n- `Ord::cmp`: lighter crates come first. Crates of equal weight are ordered by name, alphabetically.\n\n`PartialOrd` is already written: it delegates to `cmp`. Hidden tests use `to_string()`, `Cargo::default()`, `Cargo::from`, `.into()`, `.sort()`, `.max()` and `<`.\n",
+      "starter": "use std::cmp::Ordering;\nuse std::fmt;\n\n#[derive(Debug, PartialEq, Eq)]\nstruct Cargo {\n    name: String,\n    weight: u32,\n}\n\nimpl fmt::Display for Cargo {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        todo!()\n    }\n}\n\nimpl Default for Cargo {\n    fn default() -> Self {\n        todo!()\n    }\n}\n\nimpl From<(&str, u32)> for Cargo {\n    fn from(pair: (&str, u32)) -> Self {\n        todo!()\n    }\n}\n\nimpl Ord for Cargo {\n    fn cmp(&self, other: &Self) -> Ordering {\n        todo!()\n    }\n}\n\nimpl PartialOrd for Cargo {\n    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {\n        Some(self.cmp(other))\n    }\n}\n\nfn main() {\n    let mut hold: Vec<Cargo> = vec![\n        (\"rum\", 40).into(),\n        Cargo::from((\"silk\", 15)),\n        Cargo::default(),\n    ];\n    hold.sort();\n    for crate_ in &hold {\n        println!(\"{crate_}\");\n    }\n    if let Some(heaviest) = hold.iter().max() {\n        println!(\"heaviest: {heaviest}\");\n    }\n}\n",
+      "reference": "use std::cmp::Ordering;\nuse std::fmt;\n\n#[derive(Debug, PartialEq, Eq)]\nstruct Cargo {\n    name: String,\n    weight: u32,\n}\n\nimpl fmt::Display for Cargo {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"{} ({} kg)\", self.name, self.weight)\n    }\n}\n\nimpl Default for Cargo {\n    fn default() -> Self {\n        Cargo {\n            name: String::from(\"ballast\"),\n            weight: 0,\n        }\n    }\n}\n\nimpl From<(&str, u32)> for Cargo {\n    fn from(pair: (&str, u32)) -> Self {\n        let (name, weight) = pair;\n        Cargo {\n            name: name.to_string(),\n            weight,\n        }\n    }\n}\n\nimpl Ord for Cargo {\n    fn cmp(&self, other: &Self) -> Ordering {\n        self.weight\n            .cmp(&other.weight)\n            .then_with(|| self.name.cmp(&other.name))\n    }\n}\n\nimpl PartialOrd for Cargo {\n    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {\n        Some(self.cmp(other))\n    }\n}\n\nfn main() {\n    let mut hold: Vec<Cargo> = vec![\n        (\"rum\", 40).into(),\n        Cargo::from((\"silk\", 15)),\n        Cargo::default(),\n    ];\n    hold.sort();\n    for crate_ in &hold {\n        println!(\"{crate_}\");\n    }\n    if let Some(heaviest) = hold.iter().max() {\n        println!(\"heaviest: {heaviest}\");\n    }\n}\n",
+      "hints": [
+        "`Display::fmt` writes into the formatter with the `write!` macro and returns its `fmt::Result`.",
+        "`Default` and `From` just build a `Cargo { name: ..., weight: ... }`. Turn the `&str` into an owned `String` with `.to_string()`.",
+        "`u32` and `String` are already `Ord`: compare the weights with `self.weight.cmp(&other.weight)` and break ties with `.then_with(|| self.name.cmp(&other.name))`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    fn c(name: &str, weight: u32) -> Cargo {\n        Cargo {\n            name: name.to_string(),\n            weight,\n        }\n    }\n\n    #[test]\n    fn display_shows_name_and_weight() {\n        assert_eq!(c(\"rum\", 40).to_string(), \"rum (40 kg)\");\n        assert_eq!(format!(\"[{}]\", c(\"silk\", 0)), \"[silk (0 kg)]\");\n    }\n\n    #[test]\n    fn default_is_empty_ballast() {\n        assert_eq!(Cargo::default(), c(\"ballast\", 0));\n    }\n\n    #[test]\n    fn from_pair_and_into_build_cargo() {\n        assert_eq!(Cargo::from((\"tea\", 7)), c(\"tea\", 7));\n        let into: Cargo = (\"spice\", 3).into();\n        assert_eq!(into, c(\"spice\", 3));\n    }\n\n    #[test]\n    fn sort_puts_lightest_first() {\n        let mut hold = vec![c(\"rum\", 40), c(\"silk\", 15), c(\"gold\", 90)];\n        hold.sort();\n        assert_eq!(hold, vec![c(\"silk\", 15), c(\"rum\", 40), c(\"gold\", 90)]);\n    }\n\n    #[test]\n    fn equal_weight_orders_by_name() {\n        assert!(c(\"apples\", 5) < c(\"pears\", 5));\n        let mut hold = vec![c(\"zinc\", 5), c(\"anchor\", 5), c(\"map\", 1)];\n        hold.sort();\n        assert_eq!(hold, vec![c(\"map\", 1), c(\"anchor\", 5), c(\"zinc\", 5)]);\n    }\n\n    #[test]\n    fn max_is_the_heaviest() {\n        let hold = vec![c(\"rum\", 40), c(\"gold\", 90), c(\"silk\", 15)];\n        assert_eq!(hold.iter().max(), Some(&c(\"gold\", 90)));\n    }\n\n    #[test]\n    fn weight_beats_name() {\n        assert!(c(\"zzz\", 1) < c(\"aaa\", 2));\n    }\n}\n"
+      }
+    },
+    {
+      "id": "l4-complete-doubling",
+      "title": "The doubling hoard",
+      "kind": "complete",
+      "xp": 15,
+      "story": "Legend says the cursed chest doubles its doubloons every night: 1, 2, 4, 8... The navigator wants an iterator to count them, and the cook bets you can't do it without writing a single loop.",
+      "prompt": "`Doubling::up_to(limit)` yields `1, 2, 4, 8, ...` as long as the value is **at most** `limit`. For example `up_to(10)` yields `1, 2, 4, 8` and `up_to(0)` yields nothing.\n\n1. Implement `Iterator::next` for `Doubling`. It is the only method you write: everything else comes from the trait's default methods.\n2. Implement the three helpers using iterator methods (`sum`, `take`, `collect`, `filter`, `count`, ...), with **no `for`, `while` or `loop`** anywhere:\n   - `hoard(limit: u32) -> u32`: the sum of all values up to `limit`.\n   - `first_nights(limit: u32, n: usize) -> Vec<u32>`: the first `n` values (fewer if the limit is reached first).\n   - `count_at_least(limit: u32, min: u32) -> usize`: how many values are `>= min`.\n\nHidden tests call `Doubling::up_to`, `next` and the three helpers with limits up to a few thousand.\n",
+      "starter": "/// Yields 1, 2, 4, 8, ... while the value is at most `limit`.\nstruct Doubling {\n    next: u32,\n    limit: u32,\n}\n\nimpl Doubling {\n    fn up_to(limit: u32) -> Self {\n        Doubling { next: 1, limit }\n    }\n}\n\nimpl Iterator for Doubling {\n    type Item = u32;\n\n    fn next(&mut self) -> Option<u32> {\n        todo!()\n    }\n}\n\nfn hoard(limit: u32) -> u32 {\n    todo!()\n}\n\nfn first_nights(limit: u32, n: usize) -> Vec<u32> {\n    todo!()\n}\n\nfn count_at_least(limit: u32, min: u32) -> usize {\n    todo!()\n}\n\nfn main() {\n    println!(\"hoard up to 100: {}\", hoard(100));\n    println!(\"first 3 nights: {:?}\", first_nights(100, 3));\n    println!(\"piles of 10 or more: {}\", count_at_least(100, 10));\n}\n",
+      "reference": "/// Yields 1, 2, 4, 8, ... while the value is at most `limit`.\nstruct Doubling {\n    next: u32,\n    limit: u32,\n}\n\nimpl Doubling {\n    fn up_to(limit: u32) -> Self {\n        Doubling { next: 1, limit }\n    }\n}\n\nimpl Iterator for Doubling {\n    type Item = u32;\n\n    fn next(&mut self) -> Option<u32> {\n        if self.next > self.limit {\n            return None;\n        }\n        let current = self.next;\n        self.next *= 2;\n        Some(current)\n    }\n}\n\nfn hoard(limit: u32) -> u32 {\n    Doubling::up_to(limit).sum()\n}\n\nfn first_nights(limit: u32, n: usize) -> Vec<u32> {\n    Doubling::up_to(limit).take(n).collect()\n}\n\nfn count_at_least(limit: u32, min: u32) -> usize {\n    Doubling::up_to(limit).filter(|&v| v >= min).count()\n}\n\nfn main() {\n    println!(\"hoard up to 100: {}\", hoard(100));\n    println!(\"first 3 nights: {:?}\", first_nights(100, 3));\n    println!(\"piles of 10 or more: {}\", count_at_least(100, 10));\n}\n",
+      "hints": [
+        "`next` either returns `None` (we're past the limit) or `Some(value)`. Remember the current value *before* you double the state.",
+        "Each helper starts from a fresh `Doubling::up_to(limit)` and chains one or two adapter methods. The return type tells `sum` and `collect` what to produce.",
+        "`next`: `if self.next > self.limit { return None; } let v = self.next; self.next *= 2; Some(v)`. Helpers: `.sum()`, `.take(n).collect()`, `.filter(|&v| v >= min).count()`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    #[test]\n    fn up_to_ten_yields_powers_of_two() {\n        let v: Vec<u32> = Doubling::up_to(10).collect();\n        assert_eq!(v, vec![1, 2, 4, 8]);\n    }\n\n    #[test]\n    fn limit_is_inclusive() {\n        let v: Vec<u32> = Doubling::up_to(16).collect();\n        assert_eq!(v, vec![1, 2, 4, 8, 16]);\n    }\n\n    #[test]\n    fn zero_limit_yields_nothing() {\n        assert_eq!(Doubling::up_to(0).next(), None);\n    }\n\n    #[test]\n    fn stays_finished_after_none() {\n        let mut d = Doubling::up_to(1);\n        assert_eq!(d.next(), Some(1));\n        assert_eq!(d.next(), None);\n        assert_eq!(d.next(), None);\n    }\n\n    #[test]\n    fn hoard_sums_all_piles() {\n        assert_eq!(hoard(100), 127);\n        assert_eq!(hoard(0), 0);\n        assert_eq!(hoard(4096), 8191);\n    }\n\n    #[test]\n    fn first_nights_takes_at_most_n() {\n        assert_eq!(first_nights(100, 3), vec![1, 2, 4]);\n        assert_eq!(first_nights(5, 10), vec![1, 2, 4]);\n        assert_eq!(first_nights(100, 0), Vec::<u32>::new());\n    }\n\n    #[test]\n    fn count_at_least_filters() {\n        assert_eq!(count_at_least(100, 10), 3);\n        assert_eq!(count_at_least(100, 1), 7);\n        assert_eq!(count_at_least(3, 50), 0);\n    }\n}\n",
+        "forbid": [
+          {
+            "pattern": "\\bfor\\s+[\\w(),\\s&]+\\s+in\\b",
+            "message": "No for loops: use the Iterator default methods instead."
+          },
+          {
+            "pattern": "\\bwhile\\b",
+            "message": "No while loops: use the Iterator default methods instead."
+          },
+          {
+            "pattern": "\\bloop\\b",
+            "message": "No loop: use the Iterator default methods instead."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l4-write-crew",
+      "title": "Write the crew's articles",
+      "kind": "write",
+      "xp": 20,
+      "story": "Every pirate crew signs *articles*: who gets what share of the chest. The bosun wants them as a trait, so new kinds of crewmates can sign without anyone rewriting the payout rules.",
+      "prompt": "Write the following. Field names and signatures must match exactly, because hidden tests construct the structs and even add a crewmate type of their own.\n\n1. A trait `Crewmate` with\n   - required `fn name(&self) -> &str`\n   - required `fn share(&self) -> u32`: percent of the chest\n   - **default** `fn payout(&self, chest: u32) -> u32`: `chest * share / 100`, rounded down\n   - **default** `fn greeting(&self) -> String`: `Aye, I'm {name}`\n2. `struct Captain { name: String }`: share `20`. It overrides the greeting: `Captain {name}, at your service`.\n3. `struct Deckhand { name: String, years: u32 }`: share `2 + years`, but never more than `10`. It keeps the default greeting.\n4. `fn total_payout(crew: &[Box<dyn Crewmate>], chest: u32) -> u32`: the sum of everyone's payout.\n5. `fn introduce(member: &impl Crewmate) -> String`: `{greeting} ({share}%)`, e.g. `Aye, I'm Ann (5%)`.\n\nKeep a `fn main()`; it can stay empty. After the tests pass, the tutor judges your trait design: shared logic belongs in the trait, not copied into each `impl`.\n",
+      "starter": "// Write the Crewmate trait, Captain, Deckhand, total_payout and introduce here.\n\nfn main() {}\n",
+      "reference": "trait Crewmate {\n    fn name(&self) -> &str;\n\n    /// Percent of the chest.\n    fn share(&self) -> u32;\n\n    fn payout(&self, chest: u32) -> u32 {\n        chest * self.share() / 100\n    }\n\n    fn greeting(&self) -> String {\n        format!(\"Aye, I'm {}\", self.name())\n    }\n}\n\nstruct Captain {\n    name: String,\n}\n\nstruct Deckhand {\n    name: String,\n    years: u32,\n}\n\nimpl Crewmate for Captain {\n    fn name(&self) -> &str {\n        &self.name\n    }\n\n    fn share(&self) -> u32 {\n        20\n    }\n\n    fn greeting(&self) -> String {\n        format!(\"Captain {}, at your service\", self.name)\n    }\n}\n\nimpl Crewmate for Deckhand {\n    fn name(&self) -> &str {\n        &self.name\n    }\n\n    fn share(&self) -> u32 {\n        (2 + self.years).min(10)\n    }\n}\n\nfn total_payout(crew: &[Box<dyn Crewmate>], chest: u32) -> u32 {\n    crew.iter().map(|member| member.payout(chest)).sum()\n}\n\nfn introduce(member: &impl Crewmate) -> String {\n    format!(\"{} ({}%)\", member.greeting(), member.share())\n}\n\nfn main() {\n    let flint = Captain {\n        name: String::from(\"Flint\"),\n    };\n    println!(\"{}\", introduce(&flint));\n    let crew: Vec<Box<dyn Crewmate>> = vec![\n        Box::new(flint),\n        Box::new(Deckhand {\n            name: String::from(\"Ann\"),\n            years: 3,\n        }),\n    ];\n    println!(\"payout of 1000: {}\", total_payout(&crew, 1000));\n}\n",
+      "hints": [
+        "Required methods have no body in the trait (`fn name(&self) -> &str;`). Default methods have a body and may call the required ones through `self`.",
+        "Each `impl Crewmate for ...` only writes what is special about that type: `name`, `share`, and for the captain `greeting`. The deckhand's cap is `(2 + self.years).min(10)`.",
+        "`total_payout` is `crew.iter().map(|m| m.payout(chest)).sum()`. `introduce` is `format!(\"{} ({}%)\", member.greeting(), member.share())`."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    fn captain(name: &str) -> Captain {\n        Captain {\n            name: name.to_string(),\n        }\n    }\n\n    fn deckhand(name: &str, years: u32) -> Deckhand {\n        Deckhand {\n            name: name.to_string(),\n            years,\n        }\n    }\n\n    struct Parrot;\n\n    impl Crewmate for Parrot {\n        fn name(&self) -> &str {\n            \"Polly\"\n        }\n        fn share(&self) -> u32 {\n            1\n        }\n    }\n\n    #[test]\n    fn captain_takes_twenty_percent() {\n        assert_eq!(captain(\"Flint\").share(), 20);\n        assert_eq!(captain(\"Flint\").payout(1000), 200);\n    }\n\n    #[test]\n    fn deckhand_share_grows_with_years_up_to_ten() {\n        assert_eq!(deckhand(\"Ann\", 0).share(), 2);\n        assert_eq!(deckhand(\"Ann\", 3).share(), 5);\n        assert_eq!(deckhand(\"Old Bo\", 8).share(), 10);\n        assert_eq!(deckhand(\"Older Bo\", 40).share(), 10);\n    }\n\n    #[test]\n    fn payout_rounds_down() {\n        assert_eq!(deckhand(\"Ann\", 3).payout(99), 4);\n        assert_eq!(captain(\"Flint\").payout(4), 0);\n    }\n\n    #[test]\n    fn greetings_default_and_overridden() {\n        assert_eq!(deckhand(\"Ann\", 3).greeting(), \"Aye, I'm Ann\");\n        assert_eq!(\n            captain(\"Flint\").greeting(),\n            \"Captain Flint, at your service\"\n        );\n    }\n\n    #[test]\n    fn new_crewmate_gets_default_methods() {\n        assert_eq!(Parrot.payout(500), 5);\n        assert_eq!(Parrot.greeting(), \"Aye, I'm Polly\");\n    }\n\n    #[test]\n    fn total_payout_sums_a_mixed_crew() {\n        let crew: Vec<Box<dyn Crewmate>> = vec![\n            Box::new(captain(\"Flint\")),\n            Box::new(deckhand(\"Ann\", 3)),\n            Box::new(Parrot),\n        ];\n        assert_eq!(total_payout(&crew, 1000), 200 + 50 + 10);\n        assert_eq!(total_payout(&[], 1000), 0);\n    }\n\n    #[test]\n    fn introduce_works_for_any_crewmate() {\n        assert_eq!(introduce(&deckhand(\"Ann\", 3)), \"Aye, I'm Ann (5%)\");\n        assert_eq!(\n            introduce(&captain(\"Flint\")),\n            \"Captain Flint, at your service (20%)\"\n        );\n        assert_eq!(introduce(&Parrot), \"Aye, I'm Polly (1%)\");\n    }\n}\n"
+      },
+      "judge": "agent",
+      "rubric": "Idiomatic trait design. payout and greeting are default methods written once in the trait and built on the required methods (self.share(), self.name()); they are not copy-pasted into each impl. Captain overrides only greeting, and Deckhand overrides nothing beyond the required methods. name returns &str borrowed from the field (&self.name), with no clone or to_string. Deckhand's cap is clear (.min(10) or an equivalent). total_payout iterates the trait objects (iter().map(..).sum() or a simple loop) and calls payout through dyn dispatch; introduce uses static dispatch via impl Crewmate. Not acceptable: matching on a type name or an enum instead of using the trait, downcasting or Any, duplicating the payout formula outside the trait, extra required methods that leak implementation details, or unnecessary clones and allocations. Readability matters more than cleverness.\n"
+    },
+    {
+      "id": "l4-boss-fleet",
+      "title": "Boss: The Fleet Review",
+      "kind": "boss",
+      "xp": 45,
+      "story": "The admiral reads the harbour log aloud, one ship per line, and wants the fleet lined up fastest first. The program was written by a shipwright who thought `impl Ship` meant \"any ship I like\". It doesn't compile, it can't build rafts, and half of it is still `todo!()`.",
+      "prompt": "The program reads the harbour log from stdin and prints a fleet report. Make it work. For the input\n\n```text\nsloop Swift 12\ngalleon Goldtooth 30\nraft Pip\n```\n\nit prints exactly:\n\n```text\nFleet of 3, speed 2 knots\n- Swift sails at 12 knots\n- Goldtooth sails at 6 knots with 30 guns\n- Pip sails at 2 knots\n```\n\nRules:\n- Lines are `sloop NAME KNOTS`, `galleon NAME GUNS` or `raft NAME`. Words may be separated by any whitespace. Anything else, including blank lines, unknown kinds or numbers that don't parse, is skipped.\n- A galleon always sails at `6` knots. A raft sails at `2` and uses the trait's default `describe`.\n- Add `Raft` as a **new type implementing `Ship`**. Don't put the raft into an existing struct.\n- `parse_ship` decides the type at runtime, so the fleet must hold `Box<dyn Ship>`.\n- Ships are listed fastest first. Ships of equal speed are ordered by name.\n- The fleet sails at the speed of its **slowest** ship. An empty fleet prints just `Fleet of 0, speed 0 knots`.\n\nHidden cases include ties, junk lines and an empty log.\n",
+      "starter": "use std::fmt;\nuse std::io::{self, Read};\n\ntrait Ship {\n    fn name(&self) -> &str;\n    fn speed(&self) -> u32;\n    fn describe(&self) -> String {\n        format!(\"{} sails at {} knots\", self.name(), self.speed())\n    }\n}\n\nstruct Sloop {\n    name: String,\n    knots: u32,\n}\n\nstruct Galleon {\n    name: String,\n    guns: u32,\n}\n\nimpl Ship for Sloop {\n    fn name(&self) -> &str {\n        &self.name\n    }\n    fn speed(&self) -> u32 {\n        self.knots\n    }\n}\n\nimpl Ship for Galleon {\n    fn name(&self) -> &str {\n        &self.name\n    }\n    fn speed(&self) -> u32 {\n        6\n    }\n    fn describe(&self) -> String {\n        format!(\"{} sails at 6 knots with {} guns\", self.name, self.guns)\n    }\n}\n\n// TODO: a Raft sails at 2 knots and uses the default describe.\n\n/// Parses one log line. Unknown or malformed lines give None.\nfn parse_ship(line: &str) -> Option<impl Ship> {\n    let words: Vec<&str> = line.split_whitespace().collect();\n    match words.as_slice() {\n        [\"sloop\", name, knots] => Some(Sloop {\n            name: name.to_string(),\n            knots: knots.parse().ok()?,\n        }),\n        [\"galleon\", name, guns] => Some(Galleon {\n            name: name.to_string(),\n            guns: guns.parse().ok()?,\n        }),\n        _ => None,\n    }\n}\n\nstruct Fleet {\n    ships: Vec<Box<dyn Ship>>,\n}\n\nimpl Fleet {\n    /// The speed of the slowest ship, or 0 for an empty fleet.\n    fn speed(&self) -> u32 {\n        todo!()\n    }\n}\n\nimpl fmt::Display for Fleet {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        todo!()\n    }\n}\n\nfn main() {\n    let mut log = String::new();\n    io::stdin().read_to_string(&mut log).unwrap();\n    let mut ships = Vec::new();\n    for line in log.lines() {\n        if let Some(ship) = parse_ship(line) {\n            ships.push(Box::new(ship));\n        }\n    }\n    // TODO: fastest first, ties by name\n    let fleet = Fleet { ships };\n    print!(\"{fleet}\");\n}\n",
+      "reference": "use std::fmt;\nuse std::io::{self, Read};\n\ntrait Ship {\n    fn name(&self) -> &str;\n    fn speed(&self) -> u32;\n    fn describe(&self) -> String {\n        format!(\"{} sails at {} knots\", self.name(), self.speed())\n    }\n}\n\nstruct Sloop {\n    name: String,\n    knots: u32,\n}\n\nstruct Galleon {\n    name: String,\n    guns: u32,\n}\n\nstruct Raft {\n    name: String,\n}\n\nimpl Ship for Sloop {\n    fn name(&self) -> &str {\n        &self.name\n    }\n    fn speed(&self) -> u32 {\n        self.knots\n    }\n}\n\nimpl Ship for Galleon {\n    fn name(&self) -> &str {\n        &self.name\n    }\n    fn speed(&self) -> u32 {\n        6\n    }\n    fn describe(&self) -> String {\n        format!(\"{} sails at 6 knots with {} guns\", self.name, self.guns)\n    }\n}\n\nimpl Ship for Raft {\n    fn name(&self) -> &str {\n        &self.name\n    }\n    fn speed(&self) -> u32 {\n        2\n    }\n}\n\n/// Parses one log line. Unknown or malformed lines give None.\nfn parse_ship(line: &str) -> Option<Box<dyn Ship>> {\n    let words: Vec<&str> = line.split_whitespace().collect();\n    match words.as_slice() {\n        [\"sloop\", name, knots] => Some(Box::new(Sloop {\n            name: name.to_string(),\n            knots: knots.parse().ok()?,\n        })),\n        [\"galleon\", name, guns] => Some(Box::new(Galleon {\n            name: name.to_string(),\n            guns: guns.parse().ok()?,\n        })),\n        [\"raft\", name] => Some(Box::new(Raft {\n            name: name.to_string(),\n        })),\n        _ => None,\n    }\n}\n\nstruct Fleet {\n    ships: Vec<Box<dyn Ship>>,\n}\n\nimpl Fleet {\n    /// The speed of the slowest ship, or 0 for an empty fleet.\n    fn speed(&self) -> u32 {\n        self.ships.iter().map(|s| s.speed()).min().unwrap_or(0)\n    }\n}\n\nimpl fmt::Display for Fleet {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        writeln!(\n            f,\n            \"Fleet of {}, speed {} knots\",\n            self.ships.len(),\n            self.speed()\n        )?;\n        for ship in &self.ships {\n            writeln!(f, \"- {}\", ship.describe())?;\n        }\n        Ok(())\n    }\n}\n\nfn main() {\n    let mut log = String::new();\n    io::stdin().read_to_string(&mut log).unwrap();\n    let mut ships = Vec::new();\n    for line in log.lines() {\n        if let Some(ship) = parse_ship(line) {\n            ships.push(ship);\n        }\n    }\n    ships.sort_by(|a, b| {\n        b.speed()\n            .cmp(&a.speed())\n            .then_with(|| a.name().cmp(b.name()))\n    });\n    let fleet = Fleet { ships };\n    print!(\"{fleet}\");\n}\n",
+      "hints": [
+        "Start with the compile error in `parse_ship`: `impl Ship` must be **one** concrete type, but the match arms return a `Sloop` and a `Galleon`.",
+        "Return `Option<Box<dyn Ship>>` and wrap each ship in `Box::new(...)`. Then `main` can push the box as it is. `Raft` needs its own struct, an `impl Ship` with `name` and `speed`, and a `[\"raft\", name]` arm.",
+        "`Fleet::speed` is `self.ships.iter().map(|s| s.speed()).min().unwrap_or(0)`. In `fmt`, use `writeln!(f, ...)?` for the header and for each ship's `describe()`, then `Ok(())`.",
+        "Sort before building the fleet: `ships.sort_by(|a, b| b.speed().cmp(&a.speed()).then_with(|| a.name().cmp(b.name())))`. Swapping `a` and `b` in the first comparison gives fastest first."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "sloop, galleon and raft",
+            "stdin": "sloop Swift 12\ngalleon Goldtooth 30\nraft Pip\n",
+            "expected": "Fleet of 3, speed 2 knots\n- Swift sails at 12 knots\n- Goldtooth sails at 6 knots with 30 guns\n- Pip sails at 2 knots\n"
+          },
+          {
+            "name": "equal speeds are ordered by name",
+            "stdin": "sloop Zed 8\ngalleon Brute 50\nsloop Amy 8\nraft Cork\nraft Bob\n",
+            "expected": "Fleet of 5, speed 2 knots\n- Amy sails at 8 knots\n- Zed sails at 8 knots\n- Brute sails at 6 knots with 50 guns\n- Bob sails at 2 knots\n- Cork sails at 2 knots\n"
+          },
+          {
+            "name": "junk lines are skipped",
+            "stdin": "schooner Ghost 9\nsloop Leaky fast\n\n  raft   Driftwood  \ngalleon\nsloop Gull 3\nraft Two Words\n",
+            "expected": "Fleet of 2, speed 2 knots\n- Gull sails at 3 knots\n- Driftwood sails at 2 knots\n"
+          },
+          {
+            "name": "empty log",
+            "stdin": "",
+            "expected": "Fleet of 0, speed 0 knots\n"
+          },
+          {
+            "name": "a fast galleon fleet",
+            "stdin": "galleon Ironside 80\nsloop Dart 20\n",
+            "expected": "Fleet of 2, speed 6 knots\n- Dart sails at 20 knots\n- Ironside sails at 6 knots with 80 guns\n"
+          }
+        ],
+        "require": [
+          {
+            "pattern": "struct\\s+Raft\\b",
+            "message": "Add a struct Raft."
+          },
+          {
+            "pattern": "impl\\s+Ship\\s+for\\s+Raft\\b",
+            "message": "Raft must implement the Ship trait."
+          },
+          {
+            "pattern": "Box<\\s*dyn\\s+Ship\\s*>",
+            "message": "The fleet holds trait objects: Box<dyn Ship>."
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "l4-card-default-method",
+      "front": "What is a **default method** in a trait, and when does it run?",
+      "back": "A trait method with a body. It runs for every implementor that doesn't write its own version, and it can call the trait's required methods through `self`. An `impl` that defines the method **overrides** it, even when called through `&dyn Trait`.",
+      "unlockAfter": "l4-predict-default"
+    },
+    {
+      "id": "l4-card-e0369",
+      "front": "`fn total<T>(a: T, b: T) -> T { a + b }` is error E0369. Why doesn't calling it with `i32` help?",
+      "back": "Generic bodies are type-checked **once**, against the bounds only, not per call site. Nothing promises that `T` supports `+`. Add a bound: `T: std::ops::Add<Output = T>`.",
+      "unlockAfter": "l4-predict-add"
+    },
+    {
+      "id": "l4-card-bound-errors",
+      "front": "Which bound fixes each? `item > best` (E0369), `value.to_string()` (E0599), `println!(\"{value}\")` (E0277).",
+      "back": "`T: PartialOrd` for comparisons. `T: Display` for both `.to_string()` (via the blanket `ToString` impl) and `{}` formatting.",
+      "unlockAfter": "l4-fix-bounds"
+    },
+    {
+      "id": "l4-card-three-spellings",
+      "front": "Three ways to write \"`T` must implement `Display`\" on a function parameter?",
+      "back": "Inline: `fn f<T: Display>(x: T)`. Where clause: `fn f<T>(x: T) where T: Display`. Argument position: `fn f(x: impl Display)`. All three are static dispatch.",
+      "unlockAfter": "l4-fix-bounds"
+    },
+    {
+      "id": "l4-card-ord",
+      "front": "How do you make `Vec<Cargo>` sortable by weight, then by name?",
+      "back": "Implement `Ord::cmp` as `self.weight.cmp(&other.weight).then_with(|| self.name.cmp(&other.name))`, let `PartialOrd::partial_cmp` return `Some(self.cmp(other))`, and derive `PartialEq, Eq`. Then `.sort()`, `.max()` and `<` work.",
+      "unlockAfter": "l4-complete-cargo"
+    },
+    {
+      "id": "l4-card-from-into",
+      "front": "You implemented `From<(&str, u32)> for Cargo`. What else do you get for free?",
+      "back": "`Into<Cargo> for (&str, u32)`, via a blanket impl in std. So `let c: Cargo = (\"rum\", 40).into();` works. Implement `From`, not `Into`.",
+      "unlockAfter": "l4-complete-cargo"
+    },
+    {
+      "id": "l4-card-iterator",
+      "front": "What is the minimum you must write to implement `Iterator`?",
+      "back": "`type Item = ...;` and `fn next(&mut self) -> Option<Self::Item>`. Every adapter and consumer (`map`, `filter`, `take`, `sum`, `collect`, `count`, ...) is a default method built on `next`.",
+      "unlockAfter": "l4-complete-doubling"
+    },
+    {
+      "id": "l4-card-dyn",
+      "front": "What is inside a `Box<dyn Ship>`, and when do you pick it over a generic `T: Ship`?",
+      "back": "A **fat pointer**: a data pointer to the heap value plus a pointer to the type's **vtable** (size, drop, one slot per method). Calls are dynamic dispatch. Use it for mixed-type collections or types chosen at runtime. Otherwise prefer generics: monomorphized, direct calls. `-> impl Ship` can't return two different types.",
+      "unlockAfter": "l4-boss-fleet"
+    }
+  ]
+}

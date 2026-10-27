@@ -1,0 +1,689 @@
+{
+  "id": "structs-enums",
+  "order": 3,
+  "title": "Structs, Enums & Pattern Matching",
+  "summary": "Model ships, cargo and orders as your own types. Add methods with impl, let enums carry data, and take them apart with exhaustive match, guards, if let and let else, without moving out of borrowed values.",
+  "quest": {
+    "title": "The Shipwright's Blueprints",
+    "story": "The Crab Fleet has grown. There are ships with names and crews, holds full of rum, gold and treasure maps, and the captain barks a dozen kinds of orders a day. The old quartermaster tracked all of it in loose strings and numbers, and nobody can tell a barrel count from a cannon count anymore.\n\nThe fleet's shipwright hands you a set of blueprints: **structs** to build ships from, **enums** to say exactly which kind of cargo or order you are holding, and **match** to read them back. *Rustc* the parrot has learned a new trick too. Forget one kind of order in a `match` and it squawks before the ship ever leaves port.\n\nDraw up the blueprints, teach the ships to obey orders, and the shipwright will sign you on as the fleet's master builder.\n"
+  },
+  "concepts": [
+    {
+      "title": "Three kinds of struct",
+      "body": "A **struct** groups named values into one new type. Each field is owned by the struct, so dropping the struct drops its fields.\n\n```rust\nstruct Ship {          // named fields\n    name: String,\n    guns: u32,\n}\nstruct Doubloons(u32); // tuple struct: fields by position, .0\nstruct Calm;           // unit struct: no data at all\n\nlet pearl = Ship { name: String::from(\"Pearl\"), guns: 8 };\nlet purse = Doubloons(30);\nprintln!(\"{} has {} guns and {} coins\", pearl.name, pearl.guns, purse.0);\n```\n\nTuple structs give a plain number its own type, so a `Doubloons` can never be mixed up with a crew count. Unit structs are useful as markers.\n\nAdd `#[derive(Debug, Clone, PartialEq)]` above a type to get `{:?}` printing, `.clone()` and `==` for free. Each derive only works if every field supports it too.\n"
+    },
+    {
+      "title": "impl blocks: methods and associated functions",
+      "body": "Behaviour lives in an `impl` block. The first parameter decides how a method gets the value:\n\n```rust\nimpl Ship {\n    fn new(name: &str) -> Self {            // associated function: no self\n        Ship { name: name.to_string(), guns: 0 }\n    }\n    fn describe(&self) -> String {          // borrows: read only\n        format!(\"{} ({} guns)\", self.name, self.guns)\n    }\n    fn arm(&mut self, n: u32) {             // borrows mutably: may change fields\n        self.guns += n;\n    }\n    fn scuttle(self) -> String {            // takes ownership: ship is gone afterwards\n        self.name\n    }\n}\n\nlet mut ship = Ship::new(\"Pearl\");          // call with Type::\nship.arm(4);                                 // call with value.\n```\n\nPick the weakest receiver that works: `&self` to read, `&mut self` to change, `self` only when the method really consumes the value. `Self` is shorthand for the type of the `impl`.\n"
+    },
+    {
+      "title": "Enums carry data",
+      "body": "An **enum** value is exactly *one* of its variants, and each variant can carry its own data:\n\n```rust\nenum Cargo {\n    Rum(u32),                 // tuple-like variant\n    Map(String),              // owns a heap String\n    Chest { gold: u32 },      // struct-like variant\n    Empty,                    // no data\n}\n```\n\nIn memory an enum is a small **tag** that says which variant it is, plus enough room for the largest variant. A `Cargo::Map` holds the String's pointer, length and capacity inline, and the text itself lives on the heap.\n\n`Option<T>` (`Some(T)` or `None`) and `Result<T, E>` are ordinary enums from the standard library.\n"
+    },
+    {
+      "title": "match is exhaustive",
+      "body": "`match` compares a value against patterns from top to bottom and runs the first arm that fits. It must cover **every** possible value, or rustc stops with **E0004** (non-exhaustive patterns):\n\n```rust\nlet worth = match cargo {\n    Cargo::Rum(n) if n > 100 => n * 3,   // binding + guard\n    Cargo::Rum(n) => n * 2,              // n is bound to the data\n    Cargo::Chest { gold } => gold,       // struct-variant field\n    Cargo::Map(_) | Cargo::Empty => 0,   // _ ignores, | combines\n};\n```\n\n- A **guard** (`if ...`) only adds a condition. It does not count towards exhaustiveness, so you still need an unguarded arm.\n- `..` skips the remaining fields: `Ship { name, .. }`.\n- Prefer naming every variant over a catch-all `_`. Then adding a new variant later makes rustc point at every `match` that must handle it.\n"
+    },
+    {
+      "title": "if let and let else",
+      "body": "When you only care about one pattern, a full `match` is noisy:\n\n```rust\nif let Cargo::Map(place) = &cargo {\n    println!(\"a map to {place}\");\n}\n```\n\n`let ... else` is the opposite: it binds the pattern for the rest of the block, or runs the `else` block, which must leave (`return`, `break`, `continue` or panic):\n\n```rust\nfn barrels(word: &str) -> Option<u32> {\n    let Ok(n) = word.parse::<u32>() else {\n        return None;\n    };\n    Some(n * 2)\n}\n```\n\nThis keeps the happy path flat instead of nesting it inside `if let`.\n"
+    },
+    {
+      "title": "Matching through a borrow: E0507, & and ref",
+      "body": "A binding in a pattern **moves** the matched data by default. If you only *borrow* the value, you can't move a `String` out of it:\n\n```rust\nfn map_len(ship: &Ship) -> usize {\n    match ship.hold {\n        Cargo::Map(place) => place.len(), // error[E0507]: cannot move out of `ship.hold`\n        _ => 0,\n    }\n}\n```\n\nMatch on a **reference** instead. Then every binding becomes a reference too (this is called *match ergonomics*):\n\n```rust\nmatch &ship.hold {\n    Cargo::Map(place) => place.len(), // place: &String\n    _ => 0,\n}\n```\n\nThe older spelling is `Cargo::Map(ref place)`, which asks for a reference in just that one binding. Copy data such as `u32` is never a problem: binding it copies it. When you **own** the value, for example inside a method that takes `self`, moving out of it is fine.\n"
+    }
+  ],
+  "visual": {
+    "title": "A ship, its cargo, and a borrowing match",
+    "code": "struct Ship { name: String, guns: u32 }\nenum Cargo { Rum(u32), Map(String) }\nfn main() {\n    let ship = Ship { name: String::from(\"Pearl\"), guns: 8 };\n    let hold = Cargo::Map(String::from(\"Skull Isle\"));\n    match &hold {\n        Cargo::Map(place) => println!(\"{} sails to {place}\", ship.name),\n        Cargo::Rum(n) => println!(\"{n} barrels\"),\n    }\n    let flag = &ship.name;\n}",
+    "steps": [
+      {
+        "line": 4,
+        "note": "A struct is its fields laid side by side on the stack: name is a String (pointer, length, capacity) and guns is a plain u32.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "sname",
+                "name": "ship.name",
+                "value": "ptr len=5"
+              },
+              {
+                "id": "sguns",
+                "name": "ship.guns",
+                "value": "8"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "\"Pearl\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "sname",
+            "to": "h1",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 5,
+        "note": "hold is an enum: a tag saying Map, plus room for the largest variant. The Map variant owns its own heap String.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "sname",
+                "name": "ship.name",
+                "value": "ptr len=5"
+              },
+              {
+                "id": "sguns",
+                "name": "ship.guns",
+                "value": "8"
+              },
+              {
+                "id": "hold",
+                "name": "hold",
+                "value": "tag=Map ptr len=10"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "\"Pearl\""
+          },
+          {
+            "id": "h2",
+            "label": "\"Skull Isle\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "sname",
+            "to": "h1",
+            "kind": "own"
+          },
+          {
+            "from": "hold",
+            "to": "h2",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 6,
+        "note": "match &hold looks at the tag through a shared reference. Nothing is moved, so hold is frozen but not taken.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "sname",
+                "name": "ship.name",
+                "value": "ptr len=5"
+              },
+              {
+                "id": "sguns",
+                "name": "ship.guns",
+                "value": "8"
+              },
+              {
+                "id": "hold",
+                "name": "hold",
+                "value": "tag=Map ptr len=10",
+                "state": "frozen"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "\"Pearl\""
+          },
+          {
+            "id": "h2",
+            "label": "\"Skull Isle\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "sname",
+            "to": "h1",
+            "kind": "own"
+          },
+          {
+            "from": "hold",
+            "to": "h2",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 7,
+        "note": "The Map arm matches. Because we matched on &hold, place binds as &String: a borrow of the data inside hold, not a move.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "sname",
+                "name": "ship.name",
+                "value": "ptr len=5"
+              },
+              {
+                "id": "sguns",
+                "name": "ship.guns",
+                "value": "8"
+              },
+              {
+                "id": "hold",
+                "name": "hold",
+                "value": "tag=Map ptr len=10",
+                "state": "frozen"
+              },
+              {
+                "id": "place",
+                "name": "place",
+                "value": "&String"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "\"Pearl\""
+          },
+          {
+            "id": "h2",
+            "label": "\"Skull Isle\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "sname",
+            "to": "h1",
+            "kind": "own"
+          },
+          {
+            "from": "hold",
+            "to": "h2",
+            "kind": "own"
+          },
+          {
+            "from": "place",
+            "to": "hold",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 9,
+        "note": "The arm ends, place goes away, and hold is fully usable again. Without the &, place would have tried to move the String out of hold.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "sname",
+                "name": "ship.name",
+                "value": "ptr len=5"
+              },
+              {
+                "id": "sguns",
+                "name": "ship.guns",
+                "value": "8"
+              },
+              {
+                "id": "hold",
+                "name": "hold",
+                "value": "tag=Map ptr len=10"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "\"Pearl\""
+          },
+          {
+            "id": "h2",
+            "label": "\"Skull Isle\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "sname",
+            "to": "h1",
+            "kind": "own"
+          },
+          {
+            "from": "hold",
+            "to": "h2",
+            "kind": "own"
+          }
+        ]
+      },
+      {
+        "line": 10,
+        "note": "You can also borrow a single field. flag points at ship.name only, and ship.guns stays free to use.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "sname",
+                "name": "ship.name",
+                "value": "ptr len=5",
+                "state": "frozen"
+              },
+              {
+                "id": "sguns",
+                "name": "ship.guns",
+                "value": "8"
+              },
+              {
+                "id": "hold",
+                "name": "hold",
+                "value": "tag=Map ptr len=10"
+              },
+              {
+                "id": "flag",
+                "name": "flag",
+                "value": "&String"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "\"Pearl\""
+          },
+          {
+            "id": "h2",
+            "label": "\"Skull Isle\""
+          }
+        ],
+        "arrows": [
+          {
+            "from": "sname",
+            "to": "h1",
+            "kind": "own"
+          },
+          {
+            "from": "hold",
+            "to": "h2",
+            "kind": "own"
+          },
+          {
+            "from": "flag",
+            "to": "sname",
+            "kind": "borrow"
+          }
+        ]
+      },
+      {
+        "line": 11,
+        "note": "End of main: hold and ship are dropped, and each drops the String it owns. Both heap buffers are freed exactly once.",
+        "stack": [
+          {
+            "frame": "main",
+            "vars": [
+              {
+                "id": "sname",
+                "name": "ship.name",
+                "state": "dropped"
+              },
+              {
+                "id": "sguns",
+                "name": "ship.guns",
+                "state": "dropped"
+              },
+              {
+                "id": "hold",
+                "name": "hold",
+                "state": "dropped"
+              },
+              {
+                "id": "flag",
+                "name": "flag",
+                "state": "dropped"
+              }
+            ]
+          }
+        ],
+        "heap": [
+          {
+            "id": "h1",
+            "label": "\"Pearl\"",
+            "state": "freed"
+          },
+          {
+            "id": "h2",
+            "label": "\"Skull Isle\"",
+            "state": "freed"
+          }
+        ],
+        "arrows": []
+      }
+    ]
+  },
+  "challenges": [
+    {
+      "id": "l3-predict-exhaustive",
+      "title": "The forgotten order",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The bosun wrote a function that turns orders into shouts. The crew only ever hears \"hoist the sails!\", so surely nobody will notice the gap.",
+      "prompt": "Read the program. What happens when you compile and run it?",
+      "starter": "enum Order {\n    Sail,\n    Anchor,\n    Fire,\n}\n\nfn shout(order: Order) -> &'static str {\n    match order {\n        Order::Sail => \"hoist the sails!\",\n        Order::Anchor => \"drop anchor!\",\n    }\n}\n\nfn main() {\n    println!(\"{}\", shout(Order::Sail));\n}\n",
+      "reference": "E0004",
+      "choices": [
+        {
+          "id": "prints",
+          "label": "It prints `hoist the sails!`: `Fire` is never used, so the missing arm doesn't matter"
+        },
+        {
+          "id": "E0004",
+          "label": "Compile error E0004: non-exhaustive patterns, `Order::Fire` not covered"
+        },
+        {
+          "id": "panics",
+          "label": "It compiles, but would panic at runtime if `shout(Order::Fire)` were ever called"
+        },
+        {
+          "id": "warns",
+          "label": "It compiles with only a warning: variant `Fire` is never constructed"
+        }
+      ],
+      "hints": [
+        "Does rustc check `match` arms at compile time, or does it wait to see which values actually arrive?",
+        "A `match` must handle every value the type can have, whether or not your program ever creates it.",
+        "`Order::Fire` has no arm, so this is the non-exhaustive match error, E0004. Fix it with a `Order::Fire => ...` arm."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "E0004",
+        "compilerAgrees": true
+      }
+    },
+    {
+      "id": "l3-fix-receivers",
+      "title": "Hiring hands",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The shipwright's first blueprint: a ship that can hire crew and describe itself. Each method grabbed the wrong kind of `self`, and now the ship either can't change or vanishes after one look.",
+      "prompt": "This program does not compile. Fix the **methods** so it compiles and prints exactly:\n\n```text\nPearl with 5 crew\nPearl with 7 crew\n```\n\nRules:\n- Do not change `main` or the `Ship` struct.\n- No `.clone()`.\n- Only change the receivers (`self`, `&self`, `&mut self`) of the methods, and nothing else in their bodies.\n",
+      "starter": "struct Ship {\n    name: String,\n    crew: u32,\n}\n\nimpl Ship {\n    fn new(name: &str) -> Ship {\n        Ship {\n            name: name.to_string(),\n            crew: 0,\n        }\n    }\n\n    fn hire(&self, n: u32) {\n        self.crew += n;\n    }\n\n    fn describe(self) -> String {\n        format!(\"{} with {} crew\", self.name, self.crew)\n    }\n}\n\nfn main() {\n    let mut ship = Ship::new(\"Pearl\");\n    ship.hire(5);\n    println!(\"{}\", ship.describe());\n    ship.hire(2);\n    println!(\"{}\", ship.describe());\n}\n",
+      "reference": "struct Ship {\n    name: String,\n    crew: u32,\n}\n\nimpl Ship {\n    fn new(name: &str) -> Ship {\n        Ship {\n            name: name.to_string(),\n            crew: 0,\n        }\n    }\n\n    fn hire(&mut self, n: u32) {\n        self.crew += n;\n    }\n\n    fn describe(&self) -> String {\n        format!(\"{} with {} crew\", self.name, self.crew)\n    }\n}\n\nfn main() {\n    let mut ship = Ship::new(\"Pearl\");\n    ship.hire(5);\n    println!(\"{}\", ship.describe());\n    ship.hire(2);\n    println!(\"{}\", ship.describe());\n}\n",
+      "hints": [
+        "There are two separate problems. Read each error: one is about changing a field, the other about using `ship` after it was moved.",
+        "`hire` changes a field, so it needs a receiver that allows mutation. `describe` only reads, so it must not take ownership.",
+        "Use `fn hire(&mut self, n: u32)` and `fn describe(&self) -> String`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "hires twice and describes twice",
+            "expected": "Pearl with 5 crew\nPearl with 7 crew\n"
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): pick the right receiver instead of copying the ship."
+          }
+        ],
+        "require": [
+          {
+            "pattern": "fn\\s+hire\\s*\\(\\s*&\\s*mut\\s+self",
+            "message": "hire changes the ship, so it should take &mut self."
+          },
+          {
+            "pattern": "fn\\s+describe\\s*\\(\\s*&\\s*self\\s*\\)",
+            "message": "describe only reads the ship, so it should take &self."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l3-predict-guards",
+      "title": "Sorting the hold",
+      "kind": "predict",
+      "xp": 10,
+      "story": "The cook sorts the hold with a `match`. He swears big rum casks are for parties only.",
+      "prompt": "What does this program print?",
+      "starter": "enum Cargo {\n    Rum(u32),\n    Gold(u32),\n    Empty,\n}\n\nfn main() {\n    let hold = [Cargo::Rum(12), Cargo::Gold(2), Cargo::Rum(3), Cargo::Empty];\n    for cargo in &hold {\n        match cargo {\n            Cargo::Rum(n) if *n > 10 => print!(\"party \"),\n            Cargo::Rum(n) | Cargo::Gold(n) => print!(\"{n} \"),\n            Cargo::Empty => print!(\"nothing\"),\n        }\n    }\n    println!();\n}\n",
+      "reference": "party-2-3",
+      "choices": [
+        {
+          "id": "party-2-3",
+          "label": "`party 2 3 nothing`"
+        },
+        {
+          "id": "party-12-2-3",
+          "label": "`party 12 2 3 nothing`"
+        },
+        {
+          "id": "12-2-3",
+          "label": "`12 2 3 nothing`"
+        },
+        {
+          "id": "E0408",
+          "label": "Compile error: `n` can't be bound in two variants of one arm"
+        },
+        {
+          "id": "E0004",
+          "label": "Compile error E0004: the guard makes the match non-exhaustive"
+        }
+      ],
+      "hints": [
+        "Arms are tried top to bottom, and only the **first** arm that fits runs. There is no fall-through.",
+        "A guard only adds a condition to its arm. `Rum(3)` fails the guard and moves on to the next arm. An or-pattern may bind `n` in both alternatives as long as the types match.",
+        "Rum(12) hits the guarded arm, Gold(2) and Rum(3) print their numbers, and Empty prints `nothing`."
+      ],
+      "check": {
+        "kind": "choice",
+        "answer": "party-2-3",
+        "output": "party 2 3 nothing\n"
+      }
+    },
+    {
+      "id": "l3-fix-borrowed-cargo",
+      "title": "Don't steal the map",
+      "kind": "fix",
+      "xp": 15,
+      "story": "The harbour master only *looks* at each ship's papers, but the description function tries to walk off with the treasure map. *Rustc* squawks: \"cannot move out of a shared reference!\"",
+      "prompt": "This program does not compile. Make it compile and print exactly:\n\n```text\nPearl carries 12 barrels of rum\nGull carries a map to Skull Isle\nWren sails empty\n3 ships in the harbour\n```\n\nRules:\n- `describe` must keep the signature `fn describe(ship: &Ship) -> String`.\n- Do not change `main`, `Ship` or `Cargo`.\n- No `.clone()`. Borrow the map instead of moving it.\n",
+      "starter": "enum Cargo {\n    Rum(u32),\n    Map(String),\n    Empty,\n}\n\nstruct Ship {\n    name: String,\n    hold: Cargo,\n}\n\nfn describe(ship: &Ship) -> String {\n    match ship.hold {\n        Cargo::Rum(n) => format!(\"{} carries {n} barrels of rum\", ship.name),\n        Cargo::Map(place) => format!(\"{} carries a map to {place}\", ship.name),\n        Cargo::Empty => format!(\"{} sails empty\", ship.name),\n    }\n}\n\nfn main() {\n    let fleet = vec![\n        Ship {\n            name: String::from(\"Pearl\"),\n            hold: Cargo::Rum(12),\n        },\n        Ship {\n            name: String::from(\"Gull\"),\n            hold: Cargo::Map(String::from(\"Skull Isle\")),\n        },\n        Ship {\n            name: String::from(\"Wren\"),\n            hold: Cargo::Empty,\n        },\n    ];\n    for ship in &fleet {\n        println!(\"{}\", describe(ship));\n    }\n    println!(\"{} ships in the harbour\", fleet.len());\n}\n",
+      "reference": "enum Cargo {\n    Rum(u32),\n    Map(String),\n    Empty,\n}\n\nstruct Ship {\n    name: String,\n    hold: Cargo,\n}\n\nfn describe(ship: &Ship) -> String {\n    match &ship.hold {\n        Cargo::Rum(n) => format!(\"{} carries {n} barrels of rum\", ship.name),\n        Cargo::Map(place) => format!(\"{} carries a map to {place}\", ship.name),\n        Cargo::Empty => format!(\"{} sails empty\", ship.name),\n    }\n}\n\nfn main() {\n    let fleet = vec![\n        Ship {\n            name: String::from(\"Pearl\"),\n            hold: Cargo::Rum(12),\n        },\n        Ship {\n            name: String::from(\"Gull\"),\n            hold: Cargo::Map(String::from(\"Skull Isle\")),\n        },\n        Ship {\n            name: String::from(\"Wren\"),\n            hold: Cargo::Empty,\n        },\n    ];\n    for ship in &fleet {\n        println!(\"{}\", describe(ship));\n    }\n    println!(\"{} ships in the harbour\", fleet.len());\n}\n",
+      "hints": [
+        "Read error E0507: which arm tries to *move* something, and why isn't `describe` allowed to move it?",
+        "`ship` is only borrowed. The `Rum(n)` arm is fine because `u32` is `Copy`, but `Map(place)` would move the `String` out of the ship.",
+        "Match on a reference, `match &ship.hold { ... }`, so `place` becomes a `&String`. Writing `Cargo::Map(ref place)` works too."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "describes the whole fleet",
+            "expected": "Pearl carries 12 barrels of rum\nGull carries a map to Skull Isle\nWren sails empty\n3 ships in the harbour\n"
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): borrow the map with & or ref instead of copying it."
+          }
+        ],
+        "require": [
+          {
+            "pattern": "fn\\s+describe\\s*\\(\\s*ship\\s*:\\s*&\\s*Ship\\s*\\)\\s*->\\s*String",
+            "message": "Keep the signature fn describe(ship: &Ship) -> String."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l3-complete-hold",
+      "title": "Blueprint for a cargo ship",
+      "kind": "complete",
+      "xp": 15,
+      "story": "The shipwright has drawn the outline of a cargo ship. Fill in the methods so it can load, count, find and finally be scuttled for its maps.",
+      "prompt": "Fill in every `todo!()` in the `impl Ship` block. The types are given:\n\n- `Ship::new(name: &str) -> Ship`: a ship with that name and an empty hold.\n- `load(&mut self, cargo: Cargo)`: put the cargo at the end of the hold.\n- `rum(&self) -> u32`: total barrels over all `Cargo::Rum` entries.\n- `gold(&self) -> Doubloons`: total of all `Cargo::Gold` entries, wrapped in the tuple struct `Doubloons`.\n- `first_map(&self) -> Option<&str>`: the place of the **first** `Cargo::Map` in the hold, or `None`.\n- `scuttle(self) -> Vec<String>`: consume the ship and return the places of all its maps, in hold order, **moved out** of the hold.\n\nNo `.clone()` anywhere: `first_map` borrows, and `scuttle` owns the ship and can move. Hidden tests call each method directly.\n",
+      "starter": "#[derive(Debug, Clone, PartialEq)]\nenum Cargo {\n    Rum(u32),\n    Gold(u32),\n    Map(String),\n}\n\n#[derive(Debug, Clone, PartialEq)]\nstruct Doubloons(u32);\n\n#[derive(Debug, Clone, PartialEq)]\nstruct Ship {\n    name: String,\n    hold: Vec<Cargo>,\n}\n\nimpl Ship {\n    fn new(name: &str) -> Ship {\n        todo!()\n    }\n\n    fn load(&mut self, cargo: Cargo) {\n        todo!()\n    }\n\n    fn rum(&self) -> u32 {\n        todo!()\n    }\n\n    fn gold(&self) -> Doubloons {\n        todo!()\n    }\n\n    fn first_map(&self) -> Option<&str> {\n        todo!()\n    }\n\n    fn scuttle(self) -> Vec<String> {\n        todo!()\n    }\n}\n\nfn main() {\n    let mut ship = Ship::new(\"Gull\");\n    ship.load(Cargo::Rum(4));\n    ship.load(Cargo::Map(String::from(\"Skull Isle\")));\n    ship.load(Cargo::Gold(30));\n    println!(\"{}: {} rum, {:?}\", ship.name, ship.rum(), ship.gold());\n    println!(\"first map: {:?}\", ship.first_map());\n    println!(\"salvaged: {:?}\", ship.scuttle());\n}\n",
+      "reference": "#[derive(Debug, Clone, PartialEq)]\nenum Cargo {\n    Rum(u32),\n    Gold(u32),\n    Map(String),\n}\n\n#[derive(Debug, Clone, PartialEq)]\nstruct Doubloons(u32);\n\n#[derive(Debug, Clone, PartialEq)]\nstruct Ship {\n    name: String,\n    hold: Vec<Cargo>,\n}\n\nimpl Ship {\n    fn new(name: &str) -> Ship {\n        Ship {\n            name: name.to_string(),\n            hold: Vec::new(),\n        }\n    }\n\n    fn load(&mut self, cargo: Cargo) {\n        self.hold.push(cargo);\n    }\n\n    fn rum(&self) -> u32 {\n        let mut total = 0;\n        for cargo in &self.hold {\n            if let Cargo::Rum(n) = cargo {\n                total += n;\n            }\n        }\n        total\n    }\n\n    fn gold(&self) -> Doubloons {\n        let mut total = 0;\n        for cargo in &self.hold {\n            if let Cargo::Gold(n) = cargo {\n                total += n;\n            }\n        }\n        Doubloons(total)\n    }\n\n    fn first_map(&self) -> Option<&str> {\n        for cargo in &self.hold {\n            if let Cargo::Map(place) = cargo {\n                return Some(place);\n            }\n        }\n        None\n    }\n\n    fn scuttle(self) -> Vec<String> {\n        let mut maps = Vec::new();\n        for cargo in self.hold {\n            if let Cargo::Map(place) = cargo {\n                maps.push(place);\n            }\n        }\n        maps\n    }\n}\n\nfn main() {\n    let mut ship = Ship::new(\"Gull\");\n    ship.load(Cargo::Rum(4));\n    ship.load(Cargo::Map(String::from(\"Skull Isle\")));\n    ship.load(Cargo::Gold(30));\n    println!(\"{}: {} rum, {:?}\", ship.name, ship.rum(), ship.gold());\n    println!(\"first map: {:?}\", ship.first_map());\n    println!(\"salvaged: {:?}\", ship.scuttle());\n}\n",
+      "hints": [
+        "`new` builds a `Ship { ... }` literal; `Vec::new()` is an empty hold. `load` pushes onto `self.hold`.",
+        "To look at each entry without taking it, loop over `&self.hold`. Then `if let Cargo::Rum(n) = cargo` binds `n` as `&u32`, and `total += n` still works.",
+        "`first_map` can `return Some(place)` from inside `if let Cargo::Map(place) = cargo` (a `&String` coerces to `&str`). `scuttle` owns `self`, so `for cargo in self.hold` gives owned `Cargo` values and `Map(place)` moves the `String` out."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    fn stocked() -> Ship {\n        let mut s = Ship::new(\"Gull\");\n        s.load(Cargo::Rum(4));\n        s.load(Cargo::Map(String::from(\"Skull Isle\")));\n        s.load(Cargo::Gold(30));\n        s.load(Cargo::Rum(6));\n        s.load(Cargo::Map(String::from(\"Tortuga\")));\n        s.load(Cargo::Gold(5));\n        s\n    }\n\n    #[test]\n    fn new_ship_has_name_and_empty_hold() {\n        let s = Ship::new(\"Pearl\");\n        assert_eq!(s.name, \"Pearl\");\n        assert!(s.hold.is_empty());\n    }\n\n    #[test]\n    fn load_appends_in_order() {\n        let mut s = Ship::new(\"Pearl\");\n        s.load(Cargo::Gold(1));\n        s.load(Cargo::Rum(2));\n        assert_eq!(s.hold, vec![Cargo::Gold(1), Cargo::Rum(2)]);\n    }\n\n    #[test]\n    fn rum_sums_only_rum() {\n        assert_eq!(stocked().rum(), 10);\n        assert_eq!(Ship::new(\"x\").rum(), 0);\n    }\n\n    #[test]\n    fn gold_sums_into_doubloons() {\n        assert_eq!(stocked().gold(), Doubloons(35));\n        assert_eq!(Ship::new(\"x\").gold(), Doubloons(0));\n    }\n\n    #[test]\n    fn first_map_finds_the_first_one() {\n        let s = stocked();\n        assert_eq!(s.first_map(), Some(\"Skull Isle\"));\n        assert_eq!(s.hold.len(), 6, \"first_map must not change the hold\");\n    }\n\n    #[test]\n    fn first_map_is_none_without_maps() {\n        let mut s = Ship::new(\"x\");\n        s.load(Cargo::Rum(1));\n        assert_eq!(s.first_map(), None);\n    }\n\n    #[test]\n    fn scuttle_returns_all_maps_in_order() {\n        assert_eq!(stocked().scuttle(), vec![String::from(\"Skull Isle\"), String::from(\"Tortuga\")]);\n        assert!(Ship::new(\"x\").scuttle().is_empty());\n    }\n}\n",
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): borrow in first_map, move in scuttle."
+          }
+        ]
+      }
+    },
+    {
+      "id": "l3-write-call-out",
+      "title": "Call out the orders",
+      "kind": "write",
+      "xp": 20,
+      "story": "The captain's orders arrive as values of the `Order` enum. The lookout needs one function that turns any order into the words he shouts from the crow's nest.",
+      "prompt": "The `Order` enum is given. Write `fn call_out(order: &Order) -> String` that returns:\n\n- `Sail` with `knots` 0: `drift toward {heading}`\n- `Sail` with `knots` 20 or more: `full speed to {heading}!`\n- any other `Sail`: `sail to {heading} at {knots} knots`\n- `Fire` with `guns` 0: `hold fire`\n- `Fire` with `guns` 1: `fire 1 gun`\n- any other `Fire`: `fire {guns} guns`\n- `Signal` with an empty string: `(silence)`\n- any other `Signal`: `signal: {text}`\n- `Anchor`: `drop anchor`\n\nHere `{heading}`, `{knots}`, `{guns}` and `{text}` stand for the order's data.\n\nExamples: `Order::Sail { heading: String::from(\"Tortuga\"), knots: 8 }` gives `sail to Tortuga at 8 knots`, and `Order::Fire { guns: 3 }` gives `fire 3 guns`.\n\nRules: take the order by reference and don't clone it. Keep a `fn main()`; it can call `call_out` or stay empty.\n\nAfter the tests pass, the tutor judges whether your matching is idiomatic.\n",
+      "starter": "#[derive(Debug, Clone, PartialEq)]\nenum Order {\n    Sail { heading: String, knots: u32 },\n    Fire { guns: u32 },\n    Signal(String),\n    Anchor,\n}\n\n// Write fn call_out(order: &Order) -> String here.\n\nfn main() {}\n",
+      "reference": "#[derive(Debug, Clone, PartialEq)]\nenum Order {\n    Sail { heading: String, knots: u32 },\n    Fire { guns: u32 },\n    Signal(String),\n    Anchor,\n}\n\nfn call_out(order: &Order) -> String {\n    match order {\n        Order::Sail { heading, knots: 0 } => format!(\"drift toward {heading}\"),\n        Order::Sail { heading, knots } if *knots >= 20 => format!(\"full speed to {heading}!\"),\n        Order::Sail { heading, knots } => format!(\"sail to {heading} at {knots} knots\"),\n        Order::Fire { guns: 0 } => String::from(\"hold fire\"),\n        Order::Fire { guns: 1 } => String::from(\"fire 1 gun\"),\n        Order::Fire { guns } => format!(\"fire {guns} guns\"),\n        Order::Signal(text) if text.is_empty() => String::from(\"(silence)\"),\n        Order::Signal(text) => format!(\"signal: {text}\"),\n        Order::Anchor => String::from(\"drop anchor\"),\n    }\n}\n\nfn main() {\n    let orders = [\n        Order::Sail {\n            heading: String::from(\"Tortuga\"),\n            knots: 8,\n        },\n        Order::Fire { guns: 3 },\n        Order::Signal(String::from(\"land ho\")),\n        Order::Anchor,\n    ];\n    for order in &orders {\n        println!(\"{}\", call_out(order));\n    }\n}\n",
+      "hints": [
+        "One `match order { ... }` with an arm per case reads best. Arms are tried top to bottom, so put the special cases first.",
+        "Struct-like variants destructure by field name: `Order::Fire { guns: 0 }` matches a literal, `Order::Fire { guns }` binds it. A guard like `if *knots >= 20` handles ranges.",
+        "Because `order` is a `&Order`, bindings such as `heading` and `text` are references. Use them directly in `format!(\"drift toward {heading}\")`, no clone needed. Use `if text.is_empty()` as a guard for the silent signal."
+      ],
+      "check": {
+        "kind": "tests",
+        "harness": "#[cfg(test)]\nmod hidden_tests {\n    use super::*;\n\n    fn sail(h: &str, knots: u32) -> Order {\n        Order::Sail { heading: h.to_string(), knots }\n    }\n\n    #[test]\n    fn sail_at_normal_speed() {\n        assert_eq!(call_out(&sail(\"Tortuga\", 8)), \"sail to Tortuga at 8 knots\");\n        assert_eq!(call_out(&sail(\"Havana\", 19)), \"sail to Havana at 19 knots\");\n    }\n\n    #[test]\n    fn sail_at_zero_knots_drifts() {\n        assert_eq!(call_out(&sail(\"Nassau\", 0)), \"drift toward Nassau\");\n    }\n\n    #[test]\n    fn sail_at_twenty_or_more_is_full_speed() {\n        assert_eq!(call_out(&sail(\"Skull Isle\", 20)), \"full speed to Skull Isle!\");\n        assert_eq!(call_out(&sail(\"Port Royal\", 31)), \"full speed to Port Royal!\");\n    }\n\n    #[test]\n    fn fire_counts_guns_with_plural() {\n        assert_eq!(call_out(&Order::Fire { guns: 0 }), \"hold fire\");\n        assert_eq!(call_out(&Order::Fire { guns: 1 }), \"fire 1 gun\");\n        assert_eq!(call_out(&Order::Fire { guns: 12 }), \"fire 12 guns\");\n    }\n\n    #[test]\n    fn signal_repeats_text_or_is_silent() {\n        assert_eq!(call_out(&Order::Signal(String::from(\"land ho\"))), \"signal: land ho\");\n        assert_eq!(call_out(&Order::Signal(String::new())), \"(silence)\");\n    }\n\n    #[test]\n    fn anchor_drops_anchor() {\n        assert_eq!(call_out(&Order::Anchor), \"drop anchor\");\n    }\n\n    #[test]\n    fn order_is_unchanged_after_call_out() {\n        let o = sail(\"Tortuga\", 8);\n        let _ = call_out(&o);\n        assert_eq!(o, sail(\"Tortuga\", 8));\n    }\n}\n",
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): bindings from matching on &Order are already references you can format."
+          }
+        ]
+      },
+      "judge": "agent",
+      "rubric": "Idiomatic matching: a single match on the borrowed order (match order { ... } relying on match ergonomics, or match *order with ref bindings) with one arm per case. Struct-like variants are destructured by field name (Order::Sail { heading, knots }), literal patterns are used for exact values (knots: 0, guns: 0, guns: 1), and guards (if *knots >= 20, if text.is_empty()) handle conditions. Every variant is named explicitly; no catch-all _ arm over the enum's variants, so adding a variant later is a compile error. Bindings are used by reference: no .clone(), .to_owned() or .to_string() on fields just to get ownership. Deduct points for if/else chains comparing fields after the match, nested matches where a guard or literal pattern would do, accessing fields through extra helper methods instead of patterns, matches!/== tests on the whole enum, unwrap, or duplicated format strings. A plain String::from or .to_string() for fixed messages is fine.\n"
+    },
+    {
+      "id": "l3-boss-orders",
+      "title": "Boss: The Captain's Order Book",
+      "kind": "boss",
+      "xp": 50,
+      "story": "The captain drops the order book on your desk. Every line is an order for the *Crab Queen*, and the program that should carry them out is half built and won't compile. Make the ship obey and the shipwright's seal is yours.",
+      "prompt": "The program reads one order per line from stdin, applies each to the ship *Crab Queen* (starting in port `Tortuga`), prints one log line per order, and ends with a report. Complete it:\n\n1. Implement `describe`, `parse_order` and the missing arms of `Ship::apply`.\n2. Fix `Ship::report`, which does not compile.\n\n**Input.** Each line is trimmed and blank lines are skipped. A line is split on whitespace and must be exactly one of these (case-sensitive, `N` is a `u32`):\n\n```text\nload rum N     load gold N     load map PLACE\nsail PLACE     fire N          unload\n```\n\nAnything else, such as unknown words, extra or missing words, or a bad number, is invalid and prints `? ` followed by the trimmed line.\n\n**Log lines** from `apply` (`describe` gives `N rum`, `N gold` or `map to PLACE`):\n\n- load: `loaded <describe>`\n- sail: `already in PLACE` if the ship is already there, else `sailed to PLACE` and the port changes\n- fire: `held fire` for 0, else `fired N` (shots are added up)\n- unload: removes the **last** cargo and prints `unloaded <describe>`, or `hold is empty`\n\n**Report**, always the last line:\n\n```text\nCrab Queen in Havana | rum 12 | gold 5 | maps 0 | shots 3\n```\n\nRules: keep the given types and `main`, and no `.clone()`. Hidden cases include an empty order book, invalid lines and unloading an empty hold.\n",
+      "starter": "use std::io::{self, Read};\n\n#[derive(Debug, Clone, PartialEq)]\nenum Cargo {\n    Rum(u32),\n    Gold(u32),\n    Map(String),\n}\n\n#[derive(Debug, Clone, PartialEq)]\nenum Order {\n    Load(Cargo),\n    Sail(String),\n    Fire(u32),\n    Unload,\n}\n\n#[derive(Debug)]\nstruct Ship {\n    name: String,\n    port: String,\n    hold: Vec<Cargo>,\n    shots: u32,\n}\n\n/// \"12 rum\", \"5 gold\" or \"map to Skull-Isle\".\nfn describe(cargo: &Cargo) -> String {\n    todo!()\n}\n\n/// One trimmed, non-empty line into an order, or None if it is invalid.\nfn parse_order(line: &str) -> Option<Order> {\n    todo!()\n}\n\nimpl Ship {\n    fn new(name: &str, port: &str) -> Self {\n        Ship {\n            name: name.to_string(),\n            port: port.to_string(),\n            hold: Vec::new(),\n            shots: 0,\n        }\n    }\n\n    fn apply(&mut self, order: Order) -> String {\n        match order {\n            Order::Load(cargo) => {\n                let line = format!(\"loaded {}\", describe(&cargo));\n                self.hold.push(cargo);\n                line\n            }\n            Order::Fire(0) => String::from(\"held fire\"),\n            Order::Fire(n) => {\n                self.shots += n;\n                format!(\"fired {n}\")\n            }\n        }\n    }\n\n    fn report(&self) -> String {\n        let (mut rum, mut gold, mut maps) = (0, 0, 0);\n        for cargo in self.hold {\n            match cargo {\n                Cargo::Rum(n) => rum += n,\n                Cargo::Gold(n) => gold += n,\n                Cargo::Map(_) => maps += 1,\n            }\n        }\n        format!(\n            \"{} in {} | rum {rum} | gold {gold} | maps {maps} | shots {}\",\n            self.name, self.port, self.shots\n        )\n    }\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    let mut ship = Ship::new(\"Crab Queen\", \"Tortuga\");\n    for line in text.lines() {\n        let line = line.trim();\n        if line.is_empty() {\n            continue;\n        }\n        match parse_order(line) {\n            Some(order) => println!(\"{}\", ship.apply(order)),\n            None => println!(\"? {line}\"),\n        }\n    }\n    println!(\"{}\", ship.report());\n}\n",
+      "reference": "use std::io::{self, Read};\n\n#[derive(Debug, Clone, PartialEq)]\nenum Cargo {\n    Rum(u32),\n    Gold(u32),\n    Map(String),\n}\n\n#[derive(Debug, Clone, PartialEq)]\nenum Order {\n    Load(Cargo),\n    Sail(String),\n    Fire(u32),\n    Unload,\n}\n\n#[derive(Debug)]\nstruct Ship {\n    name: String,\n    port: String,\n    hold: Vec<Cargo>,\n    shots: u32,\n}\n\n/// \"12 rum\", \"5 gold\" or \"map to Skull-Isle\".\nfn describe(cargo: &Cargo) -> String {\n    match cargo {\n        Cargo::Rum(n) => format!(\"{n} rum\"),\n        Cargo::Gold(n) => format!(\"{n} gold\"),\n        Cargo::Map(place) => format!(\"map to {place}\"),\n    }\n}\n\n/// One trimmed, non-empty line into an order, or None if it is invalid.\nfn parse_order(line: &str) -> Option<Order> {\n    let words: Vec<&str> = line.split_whitespace().collect();\n    let order = match words.as_slice() {\n        [\"load\", \"rum\", n] => {\n            let Ok(n) = n.parse() else {\n                return None;\n            };\n            Order::Load(Cargo::Rum(n))\n        }\n        [\"load\", \"gold\", n] => {\n            let Ok(n) = n.parse() else {\n                return None;\n            };\n            Order::Load(Cargo::Gold(n))\n        }\n        [\"load\", \"map\", place] => Order::Load(Cargo::Map(place.to_string())),\n        [\"sail\", place] => Order::Sail(place.to_string()),\n        [\"fire\", n] => {\n            let Ok(n) = n.parse() else {\n                return None;\n            };\n            Order::Fire(n)\n        }\n        [\"unload\"] => Order::Unload,\n        _ => return None,\n    };\n    Some(order)\n}\n\nimpl Ship {\n    fn new(name: &str, port: &str) -> Self {\n        Ship {\n            name: name.to_string(),\n            port: port.to_string(),\n            hold: Vec::new(),\n            shots: 0,\n        }\n    }\n\n    fn apply(&mut self, order: Order) -> String {\n        match order {\n            Order::Load(cargo) => {\n                let line = format!(\"loaded {}\", describe(&cargo));\n                self.hold.push(cargo);\n                line\n            }\n            Order::Sail(place) if place == self.port => format!(\"already in {place}\"),\n            Order::Sail(place) => {\n                let line = format!(\"sailed to {place}\");\n                self.port = place;\n                line\n            }\n            Order::Fire(0) => String::from(\"held fire\"),\n            Order::Fire(n) => {\n                self.shots += n;\n                format!(\"fired {n}\")\n            }\n            Order::Unload => match self.hold.pop() {\n                Some(cargo) => format!(\"unloaded {}\", describe(&cargo)),\n                None => String::from(\"hold is empty\"),\n            },\n        }\n    }\n\n    fn report(&self) -> String {\n        let (mut rum, mut gold, mut maps) = (0, 0, 0);\n        for cargo in &self.hold {\n            match cargo {\n                Cargo::Rum(n) => rum += n,\n                Cargo::Gold(n) => gold += n,\n                Cargo::Map(_) => maps += 1,\n            }\n        }\n        format!(\n            \"{} in {} | rum {rum} | gold {gold} | maps {maps} | shots {}\",\n            self.name, self.port, self.shots\n        )\n    }\n}\n\nfn main() {\n    let mut text = String::new();\n    io::stdin().read_to_string(&mut text).unwrap();\n    let mut ship = Ship::new(\"Crab Queen\", \"Tortuga\");\n    for line in text.lines() {\n        let line = line.trim();\n        if line.is_empty() {\n            continue;\n        }\n        match parse_order(line) {\n            Some(order) => println!(\"{}\", ship.apply(order)),\n            None => println!(\"? {line}\"),\n        }\n    }\n    println!(\"{}\", ship.report());\n}\n",
+      "hints": [
+        "Start with the compile errors: rustc lists the order variants that `apply` doesn't cover (E0004), and `report` tries to move the hold out of a borrowed ship (E0507).",
+        "In `report`, loop over `&self.hold`. In `apply`, a guard `Order::Sail(place) if place == self.port` handles the \"already there\" case before the general `Sail` arm. `self.hold.pop()` returns an `Option<Cargo>`.",
+        "For `parse_order`, collect the words into a `Vec<&str>` and match on `words.as_slice()` with slice patterns like `[\"load\", \"rum\", n]` and `[\"unload\"]`, plus `_ => return None`.",
+        "Parse numbers with let else: `let Ok(n) = n.parse() else { return None; };`. A place becomes owned with `place.to_string()`. In the `Sail` arm, build the log line first, then move `place` into `self.port`."
+      ],
+      "check": {
+        "kind": "output",
+        "cases": [
+          {
+            "name": "a full voyage with invalid lines",
+            "stdin": "load rum 12\nload map Skull-Isle\nsail Havana\nfire 3\nsail Havana\nload gold x\nunload\nload gold 5\nfire 0\ndance a jig\n",
+            "expected": "loaded 12 rum\nloaded map to Skull-Isle\nsailed to Havana\nfired 3\nalready in Havana\n? load gold x\nunloaded map to Skull-Isle\nloaded 5 gold\nheld fire\n? dance a jig\nCrab Queen in Havana | rum 12 | gold 5 | maps 0 | shots 3\n"
+          },
+          {
+            "name": "empty order book",
+            "stdin": "",
+            "expected": "Crab Queen in Tortuga | rum 0 | gold 0 | maps 0 | shots 0\n"
+          },
+          {
+            "name": "unloading an empty hold and staying in port",
+            "stdin": "unload\n  sail Tortuga  \n\nfire 2\nfire 4\n",
+            "expected": "hold is empty\nalready in Tortuga\nfired 2\nfired 4\nCrab Queen in Tortuga | rum 0 | gold 0 | maps 0 | shots 6\n"
+          },
+          {
+            "name": "strict parsing",
+            "stdin": "load rum 3 extra\nload rum -1\nUnload\nsail\nload map\nfire many\nunload now\nload map Nassau\nload rum 7\nload rum 1\n",
+            "expected": "? load rum 3 extra\n? load rum -1\n? Unload\n? sail\n? load map\n? fire many\n? unload now\nloaded map to Nassau\nloaded 7 rum\nloaded 1 rum\nCrab Queen in Tortuga | rum 8 | gold 0 | maps 1 | shots 0\n"
+          }
+        ],
+        "forbid": [
+          {
+            "pattern": "\\.clone\\(\\)",
+            "message": "No .clone(): borrow with & where you only look, and move where you own."
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "l3-card-struct-kinds",
+      "front": "Name the three kinds of struct and how you read their fields.",
+      "back": "**Named**: `struct Ship { name: String }`, read with `ship.name`. **Tuple**: `struct Doubloons(u32)`, read with `.0`. **Unit**: `struct Calm;`, which has no fields at all."
+    },
+    {
+      "id": "l3-card-receivers",
+      "front": "When does a method take `&self`, `&mut self` or `self`?",
+      "back": "`&self` to only read, `&mut self` to change fields, `self` to **consume** the value (the caller can't use it afterwards). Pick the weakest one that works. A function in an `impl` with no `self` (like `new`) is an *associated function*, called as `Ship::new(...)`.",
+      "unlockAfter": "l3-fix-receivers"
+    },
+    {
+      "id": "l3-card-e0004",
+      "front": "What is E0004, and why does it fire even if a variant is never used?",
+      "back": "**Non-exhaustive patterns**: a `match` doesn't cover every value of the type. rustc checks this at compile time from the type, not from the values your program happens to create. Add the missing arm, ideally naming the variant instead of using `_`.",
+      "unlockAfter": "l3-predict-exhaustive"
+    },
+    {
+      "id": "l3-card-guards",
+      "front": "`Rum(n) if n > 10 => ...` is followed by `Rum(n) => ...`. What happens to `Rum(3)`?",
+      "back": "The guard fails, so matching continues with the next arm and `Rum(3)` takes the unguarded `Rum(n)` arm. Arms are tried top to bottom, only the first match runs, and guards don't count towards exhaustiveness.",
+      "unlockAfter": "l3-predict-guards"
+    },
+    {
+      "id": "l3-card-e0507",
+      "front": "`fn f(s: &Ship)` with `match s.hold { Cargo::Map(p) => ... }` fails with E0507. Why, and what are the fixes?",
+      "back": "Binding `p` would **move** the `String` out of a value you only borrow. Match on a reference instead, `match &s.hold`, so `p` becomes a `&String`, or write `Cargo::Map(ref p)`. Copy data like `u32` bindings is fine either way.",
+      "unlockAfter": "l3-fix-borrowed-cargo"
+    },
+    {
+      "id": "l3-card-if-let",
+      "front": "When do you use `if let` instead of `match`?",
+      "back": "When only one pattern matters and everything else is ignored: `if let Cargo::Map(place) = cargo { ... }`. It skips the boilerplate `_ => {}` arm.",
+      "unlockAfter": "l3-complete-hold"
+    },
+    {
+      "id": "l3-card-let-else",
+      "front": "What does `let Ok(n) = s.parse::<u32>() else { return None; };` do?",
+      "back": "If the pattern matches, `n` is bound for the **rest of the block**. Otherwise the `else` block runs, and it must diverge (`return`, `break`, `continue` or panic). It keeps the happy path flat.",
+      "unlockAfter": "l3-boss-orders"
+    },
+    {
+      "id": "l3-card-derive",
+      "front": "What do you get from `#[derive(Debug, Clone, PartialEq)]` on a struct or enum?",
+      "back": "`Debug` enables `{:?}` printing, `Clone` gives `.clone()` (a deep copy), and `PartialEq` gives `==` and `!=`, which `assert_eq!` needs. A derive only works if every field implements that trait too.",
+      "unlockAfter": "l3-complete-hold"
+    }
+  ]
+}
